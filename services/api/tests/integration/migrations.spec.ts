@@ -29,5 +29,6 @@ test('SQLite schema enforces cart quantity, unique payment reference, and one pe
   await db('payments').insert(payment)
   await assert.rejects(() => db('payments').insert({ ...payment, reference: 'test-payment-2' }))
   await assert.rejects(() => db('payments').insert({ ...payment, cart_id: cartId + 100, reference: 'test-payment-1' }))
+  await assert.rejects(() => db('products').insert({ id: 4, name: 'Duplicate SKU', sku: 'DEMO-NOTEBOOK', price_minor: 100, currency: 'NGN', stock_quantity: 1 }))
   assert.equal(await db('fulfillments').count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 0)
 })

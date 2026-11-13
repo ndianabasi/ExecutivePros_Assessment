@@ -29,7 +29,12 @@ async function cartPayload(db: Knex, cart: Row) {
     `SELECT ci.product_id, ci.product_name, ci.unit_price_minor, ci.quantity, ci.line_total_minor
      FROM cart_items ci WHERE ci.cart_id = :cart_id ORDER BY ci.product_id`, { cart_id: cart.id },
   ) as Row[]
-  return { ...cart, items }
+  const payments = await db.raw(
+    `SELECT id, reference, status, amount_minor, currency, payment_url, initialisation_state,
+            failure_scenario_code, created_at, completed_at
+     FROM payments WHERE cart_id = :cart_id ORDER BY created_at DESC, id DESC`, { cart_id: cart.id },
+  ) as Row[]
+  return { ...cart, items, payments }
 }
 
 async function recompute(tx: SqliteTransaction, cartId: number) {
@@ -50,8 +55,8 @@ async function recompute(tx: SqliteTransaction, cartId: number) {
 }
 
 async function addItem(tx: SqliteTransaction, cartId: number, item: { product_id: number; quantity: number }) {
-  const product = (await tx.query<{ id: number; name: string; price_minor: number; currency: string; stock_quantity: number; stock_reserved: number; is_active: number }>(
-    `SELECT id, name, price_minor, currency, stock_quantity, stock_reserved, is_active FROM products WHERE id = :id`, { id: item.product_id },
+  const product = (await tx.query<{ id: number; name: string; price_minor: number; currency: string; stock_quantity: number; is_active: number }>(
+    `SELECT id, name, price_minor, currency, stock_quantity, is_active FROM products WHERE id = :id`, { id: item.product_id },
   ))[0]
   if (!product || Number(product.is_active) !== 1) throw new HttpError(409, 'product_unavailable', 'A selected product is unavailable')
   const cart = (await tx.query<{ currency: string }>('SELECT currency FROM carts WHERE id = :id', { id: cartId }))[0]

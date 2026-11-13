@@ -106,11 +106,11 @@ async function setupApiTest(testCase: Test) {
   }
 }
 
-const apiTestPort = Number(process.env.API_TEST_PORT ?? 43100)
-const providerTestPort = Number(process.env.PROVIDER_TEST_PORT ?? 43101)
+const apiTestPort = Number(process.env.API_TEST_PORT)
+const providerTestPort = Number(process.env.PROVIDER_TEST_PORT)
 if (!Number.isSafeInteger(apiTestPort) || apiTestPort < 40000 || apiTestPort > 65535 ||
     !Number.isSafeInteger(providerTestPort) || providerTestPort < 40000 || providerTestPort > 65535 || apiTestPort === providerTestPort) {
-  throw new Error('API_TEST_PORT and PROVIDER_TEST_PORT must be distinct ports between 40000 and 65535')
+  throw new Error('API_TEST_PORT and PROVIDER_TEST_PORT must be set to distinct ports between 40000 and 65535 in .env.test')
 }
 const apiBaseURL = `http://127.0.0.1:${apiTestPort}`
 

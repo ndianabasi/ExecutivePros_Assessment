@@ -27,15 +27,14 @@ export async function up(knex: Knex): Promise<void> {
     table.increments('id').primary()
     table.string('name').notNullable()
     table.text('description').notNullable().defaultTo('')
+    table.string('sku').notNullable().unique()
     table.integer('price_minor').notNullable()
     table.string('currency').notNullable().defaultTo('NGN')
     table.integer('stock_quantity').notNullable().defaultTo(0)
-    table.integer('stock_reserved').notNullable().defaultTo(0)
     table.boolean('is_active').notNullable().defaultTo(true)
     table.timestamp('created_at').notNullable().defaultTo(knex.fn.now())
     table.check('price_minor >= 0')
     table.check('stock_quantity >= 0')
-    table.check('stock_reserved >= 0 AND stock_reserved <= stock_quantity')
   })
 
   await knex.schema.createTable('carts', (table) => {

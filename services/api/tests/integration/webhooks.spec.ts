@@ -27,6 +27,9 @@ test('signed payment success commits fulfilment, stock consumption, and one emai
     assert.equal((await db('stock_reservations').where({ payment_id: paymentId }).first()).status, 'consumed')
     assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
     assert.equal(await db('notification_outbox').count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+    const paymentRead = await client.get(`/v1/payments/${paymentId}`).header('Authorization', `Bearer ${(await client.post('/v1/login').json({ user_id: 1 })).body().data.token}`)
+    assert.equal(paymentRead.status(), 200)
+    assert.equal(paymentRead.body().data.fulfillment.items[0].product_name, 'Demo notebook')
 
     const duplicate = await client.post('/v1/webhooks/payment').header('X-Provider-Signature', signature).json(event)
     assert.equal(duplicate.status(), 200)

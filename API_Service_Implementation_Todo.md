@@ -36,7 +36,8 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Create the architecture's `users`, `user_tokens`, `products`, `carts`, `cart_items`, and `payments` tables with their foreign keys, checks, timestamps, and indexes.
 - [x] Enforce case-insensitive unique user email; index token hash, expiry, and user ID.
 - [x] Enforce nonnegative on-hand `products.stock_quantity`; keep product price, currency, and active state server-owned.
-- [ ] Keep product creation and mutation outside the API's public route set; use repeatable seed data for the demo catalogue.
+- [x] Store a unique product SKU and include it in catalogue responses.
+- [x] Keep product creation and mutation outside the API's public route set; use repeatable seed data for the demo catalogue.
 - [x] Support `active`, `checked_out`, `paid`, and `abandoned` cart states; add nullable `paid_at` and `checked_out_at` timestamps.
 - [x] Add the partial unique index allowing at most one active cart per user.
 - [x] Enforce unique `(cart_id, product_id)` and positive `cart_items.quantity`; preserve checkout price/currency snapshots.
@@ -57,12 +58,12 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 - [x] Implement a pinned-connection `BEGIN IMMEDIATE` helper with commit/rollback on that same connection; do not nest it inside a Knex-managed transaction.
 - [x] Retry the entire safe transaction on transient SQLite lock failures within the configured bound.
-- [ ] Use conditional updates, unique constraints, and affected-row checks to enforce one payment transition and one fulfilment.
-- [ ] Keep provider/queue HTTP calls and SSE writes outside SQLite transactions.
-- [ ] Treat all amounts as integer minor units, check safe-integer multiplication/addition, and reject zero, negative, overflowed, or mixed-currency checkout totals.
-- [ ] Define and enforce payment transitions from `pending` to one terminal state; never overwrite `success`, `failed`, or `cancelled`.
-- [ ] Define stock availability as on-hand quantity minus active reservations; reserve at checkout, consume on success, and release on failure/cancellation.
-- [ ] Make a paid cart immutable and ineligible for another checkout; allow an unsuccessful checked-out cart to start a new attempt.
+- [x] Use conditional updates, unique constraints, and affected-row checks to enforce one payment transition and one fulfilment.
+- [x] Keep provider HTTP calls outside SQLite transactions; queue calls and SSE writes remain pending until those features are implemented.
+- [x] Treat all amounts as integer minor units, check safe-integer arithmetic, and reject invalid or mixed-currency checkout totals.
+- [x] Define and enforce payment transitions from `pending` to one terminal state; never overwrite `success`, `failed`, or `cancelled`.
+- [x] Define stock availability as on-hand quantity minus active reservations; reserve at checkout, consume on success, and release on failure/cancellation.
+- [x] Make a paid cart immutable and ineligible for another checkout; allow an unsuccessful checked-out cart to start a new attempt.
 
 ## 5. Authentication, authorization, and public routes
 
@@ -79,14 +80,15 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 6. Products, carts, and failure-scenario discovery
 
-- [ ] Implement `GET /v1/products` for active products with stable pagination, default page size 20, maximum 100, totals, and available stock.
+- [x] Implement `GET /v1/products` for active products with stable pagination, default page size 20, maximum 100, totals, and available stock.
 - [x] Implement `GET /v1/cart` for the caller's active cart or `data: null`.
 - [x] Implement `POST /v1/cart` to create/reuse the one active cart and add validated product quantities.
 - [x] Implement `PATCH /v1/cart/items/:product_id` to set a positive active-cart quantity.
 - [x] Implement `DELETE /v1/cart/items/:product_id` to remove an active-cart item and return `204`.
 - [x] Implement `DELETE /v1/cart` to abandon only an active cart and return `204`.
 - [x] Recompute active-cart totals from persisted server prices after each edit; reject inactive products, currency mismatch, and unavailable quantity.
-- [ ] Implement `GET /v1/carts/:cart_id` for owner/admin access to cart items and payment attempts, including retry and page-refresh use.
+- [x] Implement `GET /v1/carts/:cart_id` for owner/admin access to cart items and payment attempts, including retry and page-refresh use.
+- [x] Implement owner-scoped `GET /v1/payments` and `GET /v1/payments/:payment_id` reads with admin-wide access and stable pagination.
 - [x] Implement `GET /v1/failure-scenarios` using the provider's active catalogue, returning `503` when unavailable.
 - [x] Validate checkout scenario codes against that catalogue and pass only the selected code to the provider.
 

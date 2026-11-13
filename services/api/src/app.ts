@@ -8,6 +8,7 @@ import { registerCheckoutRoutes } from './checkout.js'
 import { ProviderClient } from './provider.js'
 import type { ApiConfig } from './config.js'
 import { registerWebhookRoutes } from './webhooks.js'
+import { registerPaymentReadRoutes } from './payment-reads.js'
 
 export interface AppDependencies {
   db: Knex
@@ -95,8 +96,9 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
       }
       const offset = (page - 1) * pageSize
       const data = await db.raw(
-        `SELECT id, name, description, price_minor, currency,
-                (stock_quantity - stock_reserved) AS available_stock
+        `SELECT id, name, description, sku, price_minor, currency,
+                (stock_quantity - COALESCE((SELECT SUM(sr.quantity) FROM stock_reservations sr
+                   WHERE sr.product_id = products.id AND sr.status = 'active'), 0)) AS available_stock
          FROM products WHERE is_active = 1 ORDER BY id ASC LIMIT :limit OFFSET :offset`,
         { limit: pageSize, offset },
       ) as Array<Record<string, unknown>>
@@ -107,6 +109,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
   })
 
   registerCartRoutes(app, db)
+  registerPaymentReadRoutes(app, db)
   if (provider && config) registerCheckoutRoutes(app, db, provider, config)
   if (config) registerWebhookRoutes(app, db, config.providerWebhookSecret)
 

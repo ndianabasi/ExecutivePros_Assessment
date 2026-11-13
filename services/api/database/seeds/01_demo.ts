@@ -11,9 +11,9 @@ export async function seed(knex: Knex): Promise<void> {
 
   await knex('products')
     .insert([
-      { id: 1, name: 'Demo notebook', description: 'Assessment demo product', price_minor: 250000, currency: 'NGN', stock_quantity: 20, stock_reserved: 0, is_active: true },
-      { id: 2, name: 'Demo pen set', description: 'Assessment demo product', price_minor: 75000, currency: 'NGN', stock_quantity: 30, stock_reserved: 0, is_active: true },
-      { id: 3, name: 'Demo desk organiser', description: 'Assessment demo product', price_minor: 125000, currency: 'NGN', stock_quantity: 12, stock_reserved: 0, is_active: true },
+      { id: 1, name: 'Demo notebook', description: 'Assessment demo product', sku: 'DEMO-NOTEBOOK', price_minor: 250000, currency: 'NGN', stock_quantity: 20, is_active: true },
+      { id: 2, name: 'Demo pen set', description: 'Assessment demo product', sku: 'DEMO-PENSET', price_minor: 75000, currency: 'NGN', stock_quantity: 30, is_active: true },
+      { id: 3, name: 'Demo desk organiser', description: 'Assessment demo product', sku: 'DEMO-ORGANISER', price_minor: 125000, currency: 'NGN', stock_quantity: 12, is_active: true },
     ])
     .onConflict('id')
     .ignore()
