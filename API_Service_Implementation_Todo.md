@@ -71,12 +71,12 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Implement `POST /v1/login` for a seeded `user_id`, generating a cryptographically random opaque token and storing only its SHA-256 hash.
 - [x] Enforce token expiry, revocation, and active-user checks on every protected request.
 - [x] Implement `POST /v1/logout` to revoke the current token safely on repeated calls.
-- [ ] Add Bearer middleware, request-context user/role injection, and explicit admin guards where needed.
-- [ ] Scope cart, payment, and SSE data to the owner; allow admins system-wide payment reads without leaking other users' SSE events.
-- [ ] Return `404` rather than disclosing another user's payment by ID.
-- [ ] Treat login, demo-user discovery, OpenAPI JSON, health, and provider-HMAC webhook as explicit exceptions to user Bearer authentication.
-- [ ] Apply CORS only for configured frontend/documentation origins and required methods/headers; do not rely on CORS for authorization.
-- [ ] Ensure no client PUT/PATCH endpoint can set payment status.
+- [x] Add Bearer middleware, request-context user/role injection, and explicit admin guards where needed.
+- [x] Scope cart/payment reads to the owner; admins can read system-wide payments. SSE owner isolation remains pending until SSE is implemented.
+- [x] Return `404` rather than disclosing another user's payment by ID.
+- [ ] Treat login, demo-user discovery, OpenAPI JSON, health, and provider-HMAC webhook as explicit exceptions to user Bearer authentication. Login, demo-user discovery, health, and webhook are implemented; OpenAPI remains pending.
+- [x] Apply CORS only for configured frontend/documentation origins and required methods/headers; do not rely on CORS for authorization.
+- [x] Ensure no client PUT/PATCH endpoint can set payment status.
 
 ## 6. Products, carts, and failure-scenario discovery
 

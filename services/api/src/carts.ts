@@ -1,6 +1,6 @@
 import type { Knex } from 'knex'
 import type { Request, Response } from 'express'
-import { authenticate } from './auth.js'
+import { authenticatedUser } from './auth-middleware.js'
 import { HttpError } from './errors.js'
 import { immediate, type SqliteTransaction } from './sqlite.js'
 
@@ -10,14 +10,6 @@ function positiveInt(value: unknown, name: string): number {
   const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
   if (!Number.isSafeInteger(number) || Number(number) <= 0) throw new HttpError(400, 'invalid_input', `${name} must be a positive integer`)
   return Number(number)
-}
-
-async function requireUser(db: Knex, request: Request) {
-  const match = /^Bearer ([A-Za-z0-9_-]{32,})$/.exec(request.header('authorization') ?? '')
-  if (!match) throw new HttpError(401, 'unauthorized', 'A valid Bearer token is required')
-  const user = await authenticate(db, match[1]!)
-  if (!user) throw new HttpError(401, 'unauthorized', 'The Bearer token is invalid or expired')
-  return user
 }
 
 async function activeCart(tx: SqliteTransaction, userId: number): Promise<Row | undefined> {
@@ -87,14 +79,14 @@ async function addItem(tx: SqliteTransaction, cartId: number, item: { product_id
 
 export function registerCartRoutes(app: import('express').Express, db: Knex) {
   app.get('/v1/cart', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     const cart = await db('carts').where({ user_id: user.userId, status: 'active' }).first()
     response.setHeader('Cache-Control', 'no-store')
     response.json({ data: cart ? await cartPayload(db, cart) : null })
   })
 
   app.post('/v1/cart', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     const rawItems = request.body?.items
     if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 50) throw new HttpError(400, 'invalid_items', 'items must contain between 1 and 50 entries')
     const items = rawItems.map((item, index) => ({
@@ -118,7 +110,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
   })
 
   app.patch('/v1/cart/items/:product_id', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     const productId = positiveInt(request.params.product_id, 'product_id')
     const quantity = positiveInt(request.body?.quantity, 'quantity')
     const cartId = await immediate(db, async (tx) => {
@@ -135,7 +127,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
   })
 
   app.delete('/v1/cart/items/:product_id', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     const productId = positiveInt(request.params.product_id, 'product_id')
     await immediate(db, async (tx) => {
       const cart = await activeCart(tx, user.userId)
@@ -147,7 +139,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
   })
 
   app.delete('/v1/cart', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     await immediate(db, async (tx) => {
       await tx.query("UPDATE carts SET status = 'abandoned', updated_at = CURRENT_TIMESTAMP WHERE user_id = :user_id AND status = 'active'", { user_id: user.userId })
     })
@@ -155,7 +147,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
   })
 
   app.get('/v1/carts/:cart_id', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     const cartId = positiveInt(request.params.cart_id, 'cart_id')
     const cart = await db('carts').where({ id: cartId }).first()
     if (!cart || (cart.user_id !== user.userId && user.role !== 'admin')) throw new HttpError(404, 'cart_not_found', 'Cart not found')

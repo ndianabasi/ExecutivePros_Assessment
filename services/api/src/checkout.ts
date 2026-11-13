@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Express, Request } from 'express'
 import type { Knex } from 'knex'
-import { authenticate } from './auth.js'
+import { authenticatedUser } from './auth-middleware.js'
 import { HttpError } from './errors.js'
 import type { ApiConfig } from './config.js'
 import { ProviderClient, ProviderError, type ProviderPayment } from './provider.js'
@@ -10,14 +10,6 @@ import { logger } from './logging.js'
 
 type Row = Record<string, unknown>
 type CheckoutResult = { paymentId: number; reference: string; created: boolean; alreadyMapped: boolean }
-
-async function requireUser(db: Knex, request: Request) {
-  const match = /^Bearer ([A-Za-z0-9_-]{32,})$/.exec(request.header('authorization') ?? '')
-  if (!match) throw new HttpError(401, 'unauthorized', 'A valid Bearer token is required')
-  const user = await authenticate(db, match[1]!)
-  if (!user) throw new HttpError(401, 'unauthorized', 'The Bearer token is invalid or expired')
-  return user
-}
 
 function idempotencyKey(request: Request): string {
   const key = request.header('idempotency-key') ?? ''
@@ -229,14 +221,13 @@ export function registerCheckoutRoutes(app: Express, db: Knex, provider: Provide
   }
 
   app.get('/v1/failure-scenarios', async (request, response) => {
-    await requireUser(db, request)
     const available = await scenarios()
     response.setHeader('Cache-Control', 'no-store')
     response.json({ data: available })
   })
 
   app.post('/v1/cart/checkout', async (request, response) => {
-    const user = await requireUser(db, request)
+    const user = authenticatedUser(request)
     const key = idempotencyKey(request)
     const rawCartId = request.body?.cart_id
     const cartId = rawCartId === undefined ? undefined : Number(rawCartId)

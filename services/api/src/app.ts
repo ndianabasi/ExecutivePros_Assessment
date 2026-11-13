@@ -9,6 +9,7 @@ import { ProviderClient } from './provider.js'
 import type { ApiConfig } from './config.js'
 import { registerWebhookRoutes } from './webhooks.js'
 import { registerPaymentReadRoutes } from './payment-reads.js'
+import { requireAuth } from './auth-middleware.js'
 
 export interface AppDependencies {
   db: Knex
@@ -85,10 +86,14 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
     } catch (error) { next(error) }
   })
 
+  app.use('/v1/products', requireAuth(db))
+  app.use('/v1/cart', requireAuth(db))
+  app.use('/v1/carts', requireAuth(db))
+  app.use('/v1/failure-scenarios', requireAuth(db))
+  app.use('/v1/payments', requireAuth(db))
+
   app.get('/v1/products', async (request, response, next) => {
     try {
-      const token = bearer(request)
-      if (!token || !(await authenticate(db, token))) return fail(response, 401, 'unauthorized', 'A valid Bearer token is required')
       const page = Number(request.query.page ?? 1)
       const pageSize = Number(request.query.page_size ?? 20)
       if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {

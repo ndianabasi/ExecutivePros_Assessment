@@ -32,6 +32,8 @@ export function requestLogging(request: Request, response: Response, next: NextF
         path: request.path,
         status: response.statusCode,
         auth_state: request.header('authorization') ? 'present' : 'absent',
+        user_id: requestContext.getStore()?.userId,
+        role: requestContext.getStore()?.role,
         request_size: Number(request.header('content-length') ?? 0),
         response_size: Number(response.getHeader('content-length') ?? 0),
         duration_ms: Math.round(durationMs * 100) / 100,
