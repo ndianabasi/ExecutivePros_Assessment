@@ -4,7 +4,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 1. Workspace and service foundation
 
-- [ ] Create the API Service Yarn workspace with TypeScript strict mode and an Express application entry point.
+- [x] Create the API Service Yarn workspace with TypeScript strict mode and an Express application entry point.
 - [ ] Add workspace scripts for `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`; make every `test:*` script select its named Japa v5 suite through one entry point.
 - [ ] Add API-owned Knex CLI scripts for `migrate:up` and local/test-only `migrate:down`; connect them to the root Commander migration orchestration.
 - [ ] Separate routes, VineJS validators, domain services, raw-SQL repositories, provider/queue clients, background jobs, configuration, and logging.
@@ -16,7 +16,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 2. Configuration, database connection, and lifecycle
 
-- [ ] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_WEBHOOK_SECRET`, `PROVIDER_SERVICE_SECRET`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET` before listening.
+- [ ] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
 - [ ] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
 - [ ] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
 - [ ] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
@@ -49,7 +49,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Create deduplicated `payment_incidents` with trusted reference/payment linkage, redacted details, code, and resolution timestamp.
 - [ ] Create `notification_outbox` with a unique stable queue job key, payload, attempts, next-attempt time, lease, accepted time, and redacted last error.
 - [ ] Add a migration path that safely rebuilds the SQLite carts table if its status check must change.
-- [ ] Seed at least one active user, one active admin, and purchasable products; make seeding repeatable without overwriting payments or tokens.
+- [x] Seed at least one active user, one active admin, and purchasable products; make seeding repeatable without overwriting payments or tokens.
 - [ ] Use Knex schema methods only in migrations and parameterized `knex.raw` with named value bindings for runtime queries.
 
 ## 4. Transaction and domain invariants
