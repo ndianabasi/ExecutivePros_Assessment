@@ -54,8 +54,8 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 4. Transaction and domain invariants
 
-- [ ] Implement a pinned-connection `BEGIN IMMEDIATE` helper with commit/rollback on that same connection; do not nest it inside a Knex-managed transaction.
-- [ ] Retry the entire safe transaction on transient SQLite lock failures within the configured bound.
+- [x] Implement a pinned-connection `BEGIN IMMEDIATE` helper with commit/rollback on that same connection; do not nest it inside a Knex-managed transaction.
+- [x] Retry the entire safe transaction on transient SQLite lock failures within the configured bound.
 - [ ] Use conditional updates, unique constraints, and affected-row checks to enforce one payment transition and one fulfilment.
 - [ ] Keep provider/queue HTTP calls and SSE writes outside SQLite transactions.
 - [ ] Treat all amounts as integer minor units, check safe-integer multiplication/addition, and reject zero, negative, overflowed, or mixed-currency checkout totals.
@@ -79,12 +79,12 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 ## 6. Products, carts, and failure-scenario discovery
 
 - [ ] Implement `GET /v1/products` for active products with stable pagination, default page size 20, maximum 100, totals, and available stock.
-- [ ] Implement `GET /v1/cart` for the caller's active cart or `data: null`.
-- [ ] Implement `POST /v1/cart` to create/reuse the one active cart and add validated product quantities.
-- [ ] Implement `PATCH /v1/cart/items/:product_id` to set a positive active-cart quantity.
-- [ ] Implement `DELETE /v1/cart/items/:product_id` to remove an active-cart item and return `204`.
-- [ ] Implement `DELETE /v1/cart` to abandon only an active cart and return `204`.
-- [ ] Recompute active-cart totals from persisted server prices after each edit; reject inactive products, currency mismatch, and unavailable quantity.
+- [x] Implement `GET /v1/cart` for the caller's active cart or `data: null`.
+- [x] Implement `POST /v1/cart` to create/reuse the one active cart and add validated product quantities.
+- [x] Implement `PATCH /v1/cart/items/:product_id` to set a positive active-cart quantity.
+- [x] Implement `DELETE /v1/cart/items/:product_id` to remove an active-cart item and return `204`.
+- [x] Implement `DELETE /v1/cart` to abandon only an active cart and return `204`.
+- [x] Recompute active-cart totals from persisted server prices after each edit; reject inactive products, currency mismatch, and unavailable quantity.
 - [ ] Implement `GET /v1/carts/:cart_id` for owner/admin access to cart items and payment attempts, including retry and page-refresh use.
 - [ ] Implement `GET /v1/failure-scenarios` using the provider's active catalogue, returning `503` when unavailable.
 - [ ] Validate checkout scenario codes against that catalogue and pass only the selected code to the provider.

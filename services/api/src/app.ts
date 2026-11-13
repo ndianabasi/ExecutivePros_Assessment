@@ -1,6 +1,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from 'express'
 import type { Knex } from 'knex'
 import { authenticate, listDemoUsers, login, logout } from './auth.js'
+import { registerCartRoutes } from './carts.js'
+import { HttpError } from './errors.js'
 
 export interface AppDependencies {
   db: Knex
@@ -95,10 +97,13 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin }: AppDepend
     } catch (error) { next(error) }
   })
 
+  registerCartRoutes(app, db)
+
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
-    const status = typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number' ? error.status : 500
-    const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' ? error.code : 'internal_error'
-    const message = status < 500 && error instanceof Error ? error.message : 'An unexpected error occurred'
+    const parseError = typeof error === 'object' && error !== null && 'type' in error && error.type === 'entity.parse.failed'
+    const status = error instanceof HttpError ? error.status : parseError ? 400 : 500
+    const code = error instanceof HttpError ? error.code : parseError ? 'invalid_json' : 'internal_error'
+    const message = error instanceof HttpError ? error.message : parseError ? 'Request body must be valid JSON' : 'An unexpected error occurred'
     response.status(status).json({ error: { code, message } })
   })
 

@@ -45,6 +45,7 @@ export async function up(knex: Knex): Promise<void> {
     table.string('currency').notNullable().defaultTo('NGN')
     table.integer('total_minor').notNullable().defaultTo(0)
     table.timestamp('paid_at').nullable()
+    table.timestamp('checked_out_at').nullable()
     table.timestamp('created_at').notNullable().defaultTo(knex.fn.now())
     table.timestamp('updated_at').notNullable().defaultTo(knex.fn.now())
     table.check('total_minor >= 0')
