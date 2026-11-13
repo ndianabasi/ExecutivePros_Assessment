@@ -19,7 +19,7 @@ The target is a trusted assessment demo with one queue container. `POST /jobs` i
 | Exhausted jobs | Workmatic retains transient failures in `dead`. There is no dashboard, alert, inspection endpoint, or supported manual replay workflow. Normal structured logs record failures. |
 | Retention | Completed and dead Workmatic rows remain in `jobs.db` until an explicit reset of a disposable demo volume. No automatic deletion is scheduled. |
 
-The existing [API Service implementation document](API_Service_Implementation.md) and its checklist currently promise queue-side deduplication. That promise conflicts with the direct-enqueue decision above. Correct those documents **before API-to-queue integration acceptance**: the API outbox may retry a lost acknowledgement, and the queue may create another job and email. This document records the dependency; it does not implement the API Service.
+The [API Service implementation document](API_Service_Implementation.md) and its checklist carry the direct-enqueue contract: the API outbox may retry a lost acknowledgement, and the queue may create another job and email. Verify that behavior in API-to-queue contract tests. This document records the dependency; it does not implement the API Service.
 
 ## 2. Workspace, code layout, and database ownership
 
@@ -80,7 +80,9 @@ Use Pino structured logs for request completion, enqueue success/failure, each S
 
 ## 6. Test gates
 
-All gates are mandatory before deployment. Use isolated temporary **file-backed** SQLite databases for tests of persistence and restart behavior; do not use a developer's `jobs.db`. Provide workspace scripts for `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`. A skipped required suite is incomplete, not passing.
+All gates are mandatory before deployment. Use **Japa v5** (`@japa/runner` 5.x, not the legacy `japa` package) for unit, integration, contract, and Compose end-to-end tests. Pin an exact 5.x runner release and compatible `@japa/assert` and `@japa/api-client` releases in the Yarn lockfile after checking peer dependencies. Configure a service-owned ESM `bin/test.ts` with Japa `processCLIArgs`, `configure`, and `run`; use an ESM-compatible TypeScript executor supported by the pinned Node version. Define named `unit`, `integration`, `contract`, and `e2e` suites. `test` runs all suites; `test:unit`, `test:integration`, `test:contract`, and `test:e2e` select their named suites through that entry point. Keep `lint`, `typecheck`, and `build` separate. [Japa setup and suite selection](https://japa.dev/docs/installation).
+
+Use Japa assertions and lifecycle hooks to create and remove isolated temporary **file-backed** SQLite databases and to start the queue HTTP listener on an ephemeral port for Japa API-client tests. Put Workmatic persistence/restart and SMTP classification tests in `integration`, API payload/auth fixtures in `contract`, and real API/queue/Mailpit Compose and process-crash recovery in `e2e`. Use injectable clocks/short retry intervals where timing is deterministic; exercise an actual child-process restart for the durability gate. Do not use a developer's `jobs.db` or share a SQLite file across independently running tests. A skipped required suite is incomplete, not passing.
 
 | Gate | Pass condition |
 | --- | --- |
@@ -93,7 +95,7 @@ All gates are mandatory before deployment. Use isolated temporary **file-backed*
 | Permanent rejection | SMTP 5xx logs `permanent_rejection` at error level, makes one attempt, and leaves Workmatic `done`; tests do not misinterpret `done` as delivered. |
 | Duplicate/replay | Two submissions with one notification key can produce two job IDs/emails. A worker crash or expired lease after possible SMTP acceptance can resend, and no payment state is changed. |
 | Shutdown | New requests stop; in-flight jobs drain within the grace window or recover after restart; no accepted job disappears. |
-| Contract | The API's rendered email payload matches this schema and its service-auth header; API integration tests use the weaker duplicate guarantee. The API document and checklist correction is complete before acceptance. |
+| Contract | The API's rendered email payload matches this schema and its service-auth header; API integration tests use the weaker duplicate guarantee. |
 | Compose end-to-end | With the API, queue, and real Mailpit containers, a payment notification is durably accepted and appears in Mailpit; SMTP outage leaves jobs queued/retrying, and restoration drains them. Assert job state, mailbox result, and logs. |
 
 The test report must name each gate, command, result, and any unrun suite. Passing unit tests alone is not deployment acceptance.
@@ -114,6 +116,6 @@ Build one queue image from an exact patch-pinned Alpine Node base. Use a multi-s
 
 If a gate fails before traffic, keep the queue unexposed. For a failed image rollout, preserve `jobs.db` and logs; restore the previous image only if it can read the existing Workmatic schema. Otherwise restore a verified pre-upgrade backup into an isolated volume. Never use a production `down` migration or delete a persistent volume as rollback. Completed and dead jobs are not automatically purged, so disk-capacity checks are part of deployment. Reset is allowed only for an explicitly disposable demo volume.
 
-## 8. Cross-service contract correction
+## 8. Cross-service contract verification
 
-Before integration acceptance, update [API_Service_Implementation.md](API_Service_Implementation.md) and [API_Service_Implementation_Todo.md](API_Service_Implementation_Todo.md) to replace their queue-deduplication guarantee with this contract: `POST /jobs` durably accepts each call, `notification_key` is correlation metadata, a lost acknowledgement can lead to another job/email, and SMTP processing itself is at least once. Keep the API outbox because it prevents **lost notification intent**; describe duplicate email as the accepted tradeoff. The API Service must continue to treat queue failures independently of payment fulfilment.
+Before integration acceptance, verify [API_Service_Implementation.md](API_Service_Implementation.md) and [API_Service_Implementation_Todo.md](API_Service_Implementation_Todo.md) against this contract: `POST /jobs` durably accepts each call, `notification_key` is correlation metadata, a lost acknowledgement can lead to another job/email, and SMTP processing itself is at least once. The API outbox prevents **lost notification intent**; duplicate email is the accepted tradeoff. The API Service must continue to treat queue failures independently of payment fulfilment.

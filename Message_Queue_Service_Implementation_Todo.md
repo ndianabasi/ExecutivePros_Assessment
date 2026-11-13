@@ -5,7 +5,7 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 ## 1. Workspace and service structure
 
 - [ ] Create a TypeScript/Node.js Yarn workspace with an Express HTTP entry point.
-- [ ] Add workspace scripts for `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`.
+- [ ] Add workspace scripts for `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`; make every `test:*` script select its named Japa v5 suite through one entry point.
 - [ ] Keep configuration, authentication, request validation, Workmatic adapter, SMTP sender, logging, and health handling in separate modules.
 - [ ] Configure one Workmatic `emails` queue and register its processor before the server accepts jobs.
 - [ ] Run the HTTP server and a worker with concurrency two in one queue container.
@@ -89,6 +89,11 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 
 ## 7. Automated test gates — check only after passing
 
+- [ ] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
+- [ ] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
+- [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
+- [ ] Use Japa assertions and lifecycle hooks to create/clean isolated file-backed SQLite databases and start the HTTP listener on an ephemeral port for Japa API-client tests.
+- [ ] Run Workmatic restart/SMTP classification in Japa `integration`, API job/auth fixtures in `contract`, and real Compose plus child-process crash recovery in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret check, and container build pass.
 - [ ] **Config/startup:** missing/weak secret, invalid SMTP config, bad DB path, and invalid timeout/lease ordering fail before listening; valid config initializes Workmatic and starts the worker.
 - [ ] **HTTP auth:** missing/wrong Bearer secret is rejected; a valid service request is accepted only on the internal route.
@@ -130,9 +135,9 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 - [ ] Never use production `down` or persistent-volume deletion as rollback; reset only an explicitly disposable demo volume.
 - [ ] Check disk capacity because completed and dead jobs are retained until manual reset.
 
-## 9. API integration contract correction
+## 9. API integration contract verification
 
-- [ ] Update [API_Service_Implementation.md](API_Service_Implementation.md) to remove its queue-side deduplication guarantee and describe `notification_key` as correlation metadata.
-- [ ] Update [API_Service_Implementation_Todo.md](API_Service_Implementation_Todo.md) so its outbox, contract, and test tasks accept a duplicate job/email after a lost acknowledgement.
+- [ ] Verify [API_Service_Implementation.md](API_Service_Implementation.md) describes `notification_key` as correlation metadata and makes no queue-side deduplication guarantee.
+- [ ] Verify [API_Service_Implementation_Todo.md](API_Service_Implementation_Todo.md) keeps its outbox, contract, and Japa test tasks aligned with possible duplicate jobs/emails after a lost acknowledgement.
 - [ ] Keep the API outbox requirement for durable notification intent and keep email failure independent of payment fulfilment.
 - [ ] Block API-to-queue integration acceptance until both API documents and their contract tests match this queue behavior.

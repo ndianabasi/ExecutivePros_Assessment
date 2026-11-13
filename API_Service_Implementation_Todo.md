@@ -5,7 +5,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 ## 1. Workspace and service foundation
 
 - [ ] Create the API Service Yarn workspace with TypeScript strict mode and an Express application entry point.
-- [ ] Add workspace scripts for `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`.
+- [ ] Add workspace scripts for `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`; make every `test:*` script select its named Japa v5 suite through one entry point.
 - [ ] Add API-owned Knex CLI scripts for `migrate:up` and local/test-only `migrate:down`; connect them to the root Commander migration orchestration.
 - [ ] Separate routes, VineJS validators, domain services, raw-SQL repositories, provider/queue clients, background jobs, configuration, and logging.
 - [ ] Ensure API runtime code reads and writes only `api.db`, never another service's SQLite file.
@@ -137,9 +137,9 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 - [ ] Create user-email intents for successful, failed, and cancelled payments in the payment transaction.
 - [ ] Create deduplicated admin-email intents for payment-integrity incidents, invalid-signature scenarios, unresolved day-30 lookups, and late-success discrepancies.
-- [ ] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable deduplication keys.
+- [ ] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
 - [ ] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
-- [ ] Ensure a lost queue acknowledgement or duplicate dispatcher tick cannot schedule duplicate email jobs when the queue contract is honored.
+- [ ] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
 - [ ] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped status events, heartbeat, and disconnect cleanup.
 - [ ] Publish SSE only after payment commit; keep payment outcome independent of SSE or email failure.
 - [ ] Include payment ID, reference, status, and request/event ID in SSE events without leaking another user's data to admin streams.
@@ -160,6 +160,11 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 12. Automated test gates — complete only after passing
 
+- [ ] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
+- [ ] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
+- [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
+- [ ] Use Japa assertions and lifecycle hooks to create/clean deterministic fixtures, isolated temporary SQLite files, and an ephemeral Express listener for Japa API-client HTTP tests.
+- [ ] Run migration checks in Japa `integration`, provider/queue and OpenAPI checks in `contract`, and real disposable Compose/child-process/proxy recovery checks in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret scan, and OpenAPI validation all pass with zero failures.
 - [ ] **Migration/seed:** fresh `up`, repeatable seed, disposable-data `down` and second `up` pass; real SQLite files prove foreign keys, checks, unique/partial indexes, and schema version.
 - [ ] **Migration safety:** production `down` is rejected and seed reruns never overwrite runtime payments/tokens.
@@ -172,8 +177,8 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] **Webhook:** success/failure/cancellation, sequential/concurrent duplicates, altered duplicate ID, conflicting terminal event, wrong reference/amount/currency, bad signature, malformed body, and rollback return the specified outcomes.
 - [ ] **Webhook crash recovery:** replay after commit-before-ack creates no second fulfilment, stock change, or outbox intent.
 - [ ] **Reconciliation/expiry:** missing webhook recovery, provider outage, day-30 pending result, concurrent expiry/webhook, and late success produce the specified terminal state, reservation, incident, and admin alert.
-- [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, queue deduplication, SSE disconnect/reconnect, and event isolation pass without changing committed payment state.
-- [ ] **Contract:** OpenAPI examples match real API responses; provider init/status/webhook fixtures and queue job acceptance/deduplication fixtures match their declared contracts.
+- [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, possible duplicate queue job/email, SSE disconnect/reconnect, and event isolation pass without changing the one API intent or committed payment state.
+- [ ] **Contract:** OpenAPI examples match real API responses; provider init/status/webhook fixtures and queue job acceptance, correlation key, and possible duplicate-submission fixtures match their declared contracts.
 - [ ] **Compose end-to-end:** real containers pass login → cart → checkout → provider completion → webhook → paid cart/fulfilment/stock/email/SSE, with final database and log assertions.
 - [ ] **Compose failure end-to-end:** duplicate webhook, provider timeout, missed webhook reconciliation, invalid signature, and queue outage/recovery pass with final-state assertions.
 - [ ] Record gate commands/results and every skipped or blocked suite; do not use a coverage percentage as a substitute for concurrency or crash tests.
@@ -202,7 +207,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Confirm provider `POST /payments` is idempotent by reference and details, with conflict rejection for changed details.
 - [ ] Confirm authenticated provider `GET /payments/:reference` returns reference, amount, currency, status, and URL when available.
 - [ ] Confirm the provider exposes an active failure-scenario catalogue and signs raw webhook bodies with stable `event_id` values; delivery retries `503`/network failures and stops on `2xx` or permanent `4xx`.
-- [ ] Confirm authenticated queue `POST /jobs` durably accepts email work, deduplicates a stable key, and distinguishes acceptance from temporary failure.
+- [ ] Confirm authenticated queue `POST /jobs` durably accepts each call, treats `notification_key` as correlation metadata, may create a second job/email after an uncertain retry, and distinguishes acceptance from temporary failure.
 - [ ] Confirm the frontend sends Bearer tokens and checkout idempotency keys, keeps a key for HTTP retries, uses a new key for a new attempt, opens an Authorization-capable SSE stream, and refetches payment state after reconnect.
 - [ ] Confirm the documentation service can fetch public `/v1/api_docs.json` from its allowed CORS origin and represents Bearer and webhook-HMAC authentication separately.
 - [ ] Block API integration acceptance if any required provider/queue contract is absent; do not compensate by reading another service's database or weakening API invariants.

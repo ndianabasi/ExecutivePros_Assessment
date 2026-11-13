@@ -5,7 +5,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 ## 1. Workspace and service boundary
 
 - [ ] Create one strict TypeScript/Node.js Yarn workspace with Express, VineJS, Knex, Workmatic, and Pino.
-- [ ] Provide `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build` scripts.
+- [ ] Provide `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build` scripts; make every `test:*` script select its named Japa v5 suite through one entry point.
 - [ ] Keep configuration, authenticated routes, browser checkout, repositories, scenarios, webhook dispatch, worker, and logging in separate modules.
 - [ ] Keep API cart/payment verification, fulfilment, reconciliation, SSE, and notifications outside the provider service.
 - [ ] Run one provider process/container; add no endpoint that directly confirms an API payment or grants API-side value.
@@ -127,6 +127,11 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 
 ## 9. Automated test gates — check only after passing
 
+- [ ] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
+- [ ] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
+- [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
+- [ ] Use Japa assertions and lifecycle hooks for disposable file-backed SQLite, scenario seeds, ephemeral HTTP listener, Japa API-client calls, and cleanup.
+- [ ] Run migrations/Knex-Workmatic concurrency/worker recovery in Japa `integration`, HMAC/API handoff fixtures in `contract`, and real Compose/browser/test-proxy/child-process crash cases in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile integrity, no committed secrets, Alpine container build, and runtime SQLite module load pass.
 - [ ] **Migration constraints:** real file-backed SQLite enforces unique references/event IDs/attempt numbers, checks, foreign keys, WAL, and busy timeout on all connections.
 - [ ] **Seed and startup:** scenario seeds are idempotent; Workmatic tables initialize in the same provider DB; bad path/schema fails before listening.
