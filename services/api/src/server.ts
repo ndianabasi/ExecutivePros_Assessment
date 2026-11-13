@@ -1,19 +1,12 @@
 import { createApp } from './app.js'
 import { loadConfig } from './config.js'
-import { createDatabase } from './db.js'
+import { createDatabase, verifyDatabase } from './db.js'
 
 const config = loadConfig()
 const db = createDatabase(config.dbPath)
 const app = createApp({
   db,
-  isReady: async () => {
-    try {
-      const migrations = await db.raw("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knex_migrations'") as unknown[]
-      return migrations.length > 0
-    } catch {
-      return false
-    }
-  },
+  isReady: () => verifyDatabase(db),
   frontendOrigin: config.frontendOrigin,
   docsOrigin: config.docsOrigin,
 })

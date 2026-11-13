@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import knex from 'knex'
 import { test } from '@japa/runner'
 import config from '../../knexfile.js'
+import { verifyDatabase } from '../../src/db.js'
 
 test('migrates a file database and seeds demo records idempotently', async ({ assert }) => {
   const directory = await mkdtemp(join(tmpdir(), 'api-migration-'))
@@ -27,6 +28,7 @@ test('migrates a file database and seeds demo records idempotently', async ({ as
     assert.equal(second[1].length, 0)
     assert.equal(Number(users?.count), 2)
     assert.equal(Number(products?.count), 3)
+    assert.isTrue(await verifyDatabase(db))
   } finally {
     await db.destroy()
     await rm(directory, { recursive: true, force: true })

@@ -27,6 +27,9 @@ test('cart routes create, update, retrieve, remove items, and enforce owner acce
   try {
     const login = await client.post('/v1/login').json({ user_id: 1 })
     const token = login.body().data.token as string
+    const invalidItem = await client.post('/v1/cart').header('Authorization', `Bearer ${token}`).json({ items: [{ product_id: 999, quantity: 1 }] })
+    assert.equal(invalidItem.status(), 409)
+    assert.equal(invalidItem.body().error.request_id, invalidItem.header('x-request-id'))
     const empty = await client.get('/v1/cart').header('Authorization', `Bearer ${token}`)
     assert.equal(empty.body().data, null)
 

@@ -16,16 +16,16 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 2. Configuration, database connection, and lifecycle
 
-- [ ] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
-- [ ] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
+- [x] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
+- [x] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
 - [ ] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
 - [ ] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
 - [ ] Configure reconciliation every 60 seconds after a 30-second grace period, outbox dispatch every 5 seconds, batch size 100, and payment expiry at 30 days.
 - [ ] Make intervals, attempt limits, and backoff configurable and deterministic under tests; bound backoff and add jitter in runtime.
-- [ ] Store and compare timestamps in UTC.
-- [ ] Enable and verify SQLite foreign keys on every connection, WAL mode, and a finite busy timeout.
+- [x] Store and compare timestamps in UTC.
+- [x] Enable and verify SQLite foreign keys on every connection, WAL mode, and a finite busy timeout.
 - [ ] Implement `GET /health/live` for process liveness.
-- [ ] Implement `GET /health/ready` for validated config, database access, and expected API migration version.
+- [x] Implement `GET /health/ready` for validated config, database access, and expected API migration version.
 - [ ] Keep readiness independent of provider/queue outages while reporting those outages in diagnostics and logs.
 - [ ] Restrict health endpoints to the trusted Compose network or host loopback.
 - [ ] Implement bounded graceful shutdown: stop new requests, close SSE clients, finish or roll back in-flight transactions, and preserve recoverable scheduled work.

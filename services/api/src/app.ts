@@ -3,6 +3,7 @@ import type { Knex } from 'knex'
 import { authenticate, listDemoUsers, login, logout } from './auth.js'
 import { registerCartRoutes } from './carts.js'
 import { HttpError } from './errors.js'
+import { currentRequestId, logger, requestLogging } from './logging.js'
 
 export interface AppDependencies {
   db: Knex
@@ -25,6 +26,7 @@ function fail(response: Response, status: number, code: string, message: string)
 export function createApp({ db, isReady, frontendOrigin, docsOrigin }: AppDependencies): Express {
   const app = express()
   app.disable('x-powered-by')
+  app.use(requestLogging)
   app.use((request, response, next) => {
     const origin = request.header('origin')
     if (origin === frontendOrigin || origin === docsOrigin) {
@@ -104,7 +106,8 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin }: AppDepend
     const status = error instanceof HttpError ? error.status : parseError ? 400 : 500
     const code = error instanceof HttpError ? error.code : parseError ? 'invalid_json' : 'internal_error'
     const message = error instanceof HttpError ? error.message : parseError ? 'Request body must be valid JSON' : 'An unexpected error occurred'
-    response.status(status).json({ error: { code, message } })
+    if (status >= 500) logger.error({ request_id: currentRequestId(), error_type: error instanceof Error ? error.name : 'unknown' }, 'request failed')
+    response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
   })
 
   return app

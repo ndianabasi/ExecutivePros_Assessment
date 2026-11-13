@@ -29,3 +29,15 @@ test('rejects a URL with a path when an origin is required', ({ assert }) => {
 test('rejects secret values supplied both directly and by file', ({ assert }) => {
   assert.throws(() => loadConfig({ ...validConfig, PROVIDER_WEBHOOK_SECRET_FILE: '/secret' }))
 })
+
+test('rejects direct secrets outside test mode and database paths escaping the mounted data directory', ({ assert }) => {
+  assert.throws(() => loadConfig({ ...validConfig, NODE_ENV: 'production' }))
+  assert.throws(() => loadConfig({ ...validConfig, API_DB_PATH: '/data/../etc/api.db' }))
+})
+
+test('allows bounded deterministic job settings in tests', ({ assert }) => {
+  const config = loadConfig({ ...validConfig, RECONCILE_INTERVAL_MS: '250', JOB_BATCH_SIZE: '5' })
+  assert.equal(config.reconcileIntervalMs, 250)
+  assert.equal(config.jobBatchSize, 5)
+  assert.throws(() => loadConfig({ ...validConfig, JOB_BATCH_SIZE: '0' }))
+})
