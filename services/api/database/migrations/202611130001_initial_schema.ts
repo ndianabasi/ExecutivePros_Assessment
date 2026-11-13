@@ -20,6 +20,8 @@ export async function up(knex: Knex): Promise<void> {
     table.timestamp('revoked_at').nullable()
     table.timestamp('created_at').notNullable().defaultTo(knex.fn.now())
   })
+  await knex.raw('CREATE UNIQUE INDEX users_email_nocase ON users(email COLLATE NOCASE)')
+  await knex.raw('CREATE INDEX user_tokens_user_expiry ON user_tokens(user_id, expires_at)')
 
   await knex.schema.createTable('products', (table) => {
     table.increments('id').primary()
