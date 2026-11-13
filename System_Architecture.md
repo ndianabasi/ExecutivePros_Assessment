@@ -409,9 +409,92 @@ The Vinejs library should be used for request validations.
 
 #### Failure and Idempotency Handling
 
-##### Duplicate Payment or Webhook Events Handling
+The API Service shall implement idempotency and failure recovery mechanisms to ensure that payment transactions are processed reliably, even when duplicate requests, concurrent operations, network failures, or service interruptions occur.
 
-##### Retry Handling
+The following principles shall apply:
+
+1. **Exactly-once payment fulfilment:** A successfully verified payment must grant value to the user only once, regardless of how many times the corresponding webhook is received.
+2. **Database consistency:** SQLite transactions, unique constraints, and conditional updates shall be used to prevent race conditions and inconsistent payment states.
+3. **Payment state integrity:** Payment status transitions shall be validated. Terminal states (`success`, `failed`, `cancelled`) must not be overwritten by stale or conflicting webhook events.
+4. **Independent notification processing:** SSE notifications and email delivery failures must not invalidate successfully processed payments.
+5. **Failure traceability:** All payment processing failures, duplicate requests, and retry attempts shall be logged using `pino`, including the request ID and payment reference.
+
+#### Duplicate Payment or Webhook Events Handling
+
+**1. Duplicate Cart Checkout**
+
+- The API Service shall prevent concurrent checkout requests from initialising multiple active payments for the same cart.
+- Checkout operations shall use SQLite transactions with `BEGIN IMMEDIATE` to serialise competing write operations.
+- The cart's current status and existing payment records shall be checked before creating a new payment.
+- A database-level uniqueness constraint or equivalent guard shall prevent multiple pending payments for the same cart.
+- If an active payment already exists, subsequent checkout requests shall return the existing payment details where available, rather than initialise another payment.
+- A successfully checked-out and paid cart shall not be eligible for another checkout.
+
+**2. Duplicate Webhook Events**
+
+- Every incoming webhook shall be authenticated by verifying its signature using the shared secret between the API Service and Mock Payment Provider.
+- The payment reference, amount, currency, and current payment status shall be validated before processing.
+- Payment updates shall be performed within SQLite transactions using conditional updates, such as transitioning from `pending` to `success` only when the current status is still `pending`.
+- Only the request that successfully performs the transition shall trigger payment fulfillment.
+- Duplicate webhook events received after successful processing shall be acknowledged with HTTP `200` without repeating fulfillment or scheduling duplicate notifications.
+- Webhooks containing conflicting payment information or invalid state transitions shall be rejected or ignored as appropriate, with the incident logged.
+
+**3. Duplicate Payment Fulfilment**
+
+- Payment fulfillment shall be idempotent and uniquely associated with the payment reference.
+- A persistent fulfillment record or equivalent database constraint shall ensure that value cannot be granted more than once.
+- Fulfillment state changes shall be committed atomically with the relevant payment-processing records where they share the same database.
+- If the API Service crashes after granting value but before acknowledging the webhook, subsequent webhook retries shall detect the completed fulfilment and avoid repeating it.
+
+#### Retry Handling
+
+Retries shall be implemented for transient failures using bounded retry attempts and exponential backoff. Permanent failures, including invalid signatures, incorrect payment amounts, and malformed webhook payloads, shall not be retried automatically.
+
+**1. Payment Initialisation Retries**
+
+- The API Service shall apply request timeouts when communicating with the Mock Payment Provider.
+- Transient failures, such as connection timeouts and HTTP `503` responses, may trigger retries with exponential backoff.
+- Retried initialisation requests shall reuse the original payment reference to prevent duplicate provider transactions.
+- The Mock Payment Provider shall treat repeated initialisation requests with the same reference and payment details as idempotent operations.
+- If the provider's response is lost after successful initialisation, the API Service shall recover the existing transaction rather than create another payment.
+
+**2. Webhook Delivery Retries**
+
+- The Mock Payment Provider shall use its Workmatic persistent job queue to schedule and retry webhook deliveries.
+- Webhook delivery attempts shall be recorded in `payment_provider.db / webhook_deliveries`, including attempt number, HTTP response code, and error details.
+- Failed deliveries caused by network errors, timeouts, or retryable HTTP responses shall be retried using exponential backoff, with a configurable maximum number of attempts.
+- HTTP `2xx` responses shall indicate successful webhook acknowledgement and terminate further automatic retries.
+- Webhook events that exceed the maximum retry attempts shall be marked as failed and retained for inspection.
+- All retry attempts shall reuse the original webhook event identifier and payload unless a configured failure scenario explicitly requires otherwise.
+
+**3. Payment Processing Recovery**
+
+- Database failures and transaction rollbacks shall result in retryable webhook responses when processing has not been durably completed.
+- If the API Service crashes during payment processing, subsequent webhook deliveries shall resume processing based on the persisted payment and fulfillment states.
+- The API Service shall not acknowledge successful processing until the required payment state changes and durable fulfillment work have been recorded.
+- Payments remaining in the `pending` state for more than 30 days shall be marked as `failed` by the scheduled CRON job, as defined in the payment lifecycle.
+
+**4. Notification Retries**
+
+- Email notifications shall be submitted as asynchronous jobs to the Message Queue Service using its `POST /jobs` endpoint.
+- The Message Queue Service shall use Workmatic to persist failed email jobs and retry them according to the configured retry policy.
+- Notification jobs shall use a unique combination of payment reference, notification type, and recipient to prevent duplicate scheduling.
+- Failed SSE deliveries shall not trigger payment reprocessing. The Frontend Service shall reconnect and retrieve the current payment state when the connection is restored.
+- Notification failures shall be logged independently and must not reverse an already successful payment.
+
+**5. Retry Configuration**
+
+The following default retry configuration is proposed for the simplified implementation:
+
+| Operation                           | Maximum Attempts | Initial Delay    | Backoff Strategy                        |
+| ----------------------------------- | ---------------- | ---------------- | --------------------------------------- |
+| Payment initialisation              | 3                | 1 second         | Exponential                             |
+| Webhook delivery                    | 5                | 2 seconds        | Exponential                             |
+| Database operation (transient lock) | 3                | 100 milliseconds | Exponential                             |
+| Email notification                  | 3                | 5 seconds        | Exponential                             |
+| SSE notification                    | N/A              | N/A              | Client reconnection and state retrieval |
+
+All retry attempts shall be logged with their corresponding request ID, payment reference, attempt number, and failure reason. Retry configuration values shall be adjustable through environment variables or service configuration.
 
 ### Message Queue Service Design
 
