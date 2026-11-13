@@ -32,22 +32,22 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 3. `api.db` migrations and seed data
 
-- [ ] Create the architecture's `users`, `user_tokens`, `products`, `carts`, `cart_items`, and `payments` tables with their foreign keys, checks, timestamps, and indexes.
-- [ ] Enforce case-insensitive unique user email; index token hash, expiry, and user ID.
-- [ ] Enforce nonnegative on-hand `products.stock_quantity`; keep product price, currency, and active state server-owned.
+- [x] Create the architecture's `users`, `user_tokens`, `products`, `carts`, `cart_items`, and `payments` tables with their foreign keys, checks, timestamps, and indexes.
+- [x] Enforce case-insensitive unique user email; index token hash, expiry, and user ID.
+- [x] Enforce nonnegative on-hand `products.stock_quantity`; keep product price, currency, and active state server-owned.
 - [ ] Keep product creation and mutation outside the API's public route set; use repeatable seed data for the demo catalogue.
-- [ ] Support `active`, `checked_out`, `paid`, and `abandoned` cart states; add nullable `paid_at` and `checked_out_at` timestamps.
-- [ ] Add the partial unique index allowing at most one active cart per user.
-- [ ] Enforce unique `(cart_id, product_id)` and positive `cart_items.quantity`; preserve checkout price/currency snapshots.
-- [ ] Add nullable payment URL, provider-initialisation state/retry metadata, failure-scenario code, and `reconcile_after` to `payments`.
-- [ ] Enforce unique payment reference, positive checkout amount, and at most one pending payment per cart with a partial unique index.
-- [ ] Add payment indexes for owner pagination, cart attempts, reconciliation, and expiry scans.
-- [ ] Create `checkout_requests` with unique `(user_id, idempotency_key)`, canonical fingerprint, cart ID, payment ID, and creation time.
-- [ ] Create `stock_reservations` with unique `(payment_id, product_id)`, positive quantity, and active/consumed/released states.
-- [ ] Create `fulfillments` and `fulfillment_items` with unique payment and cart fulfilment constraints and purchased-item snapshots.
-- [ ] Create `provider_events` for webhook/reconciliation evidence, unique webhook event ID, payload/response hash, reference, outcome, and timestamps.
-- [ ] Create deduplicated `payment_incidents` with trusted reference/payment linkage, redacted details, code, and resolution timestamp.
-- [ ] Create `notification_outbox` with a unique stable queue job key, payload, attempts, next-attempt time, lease, accepted time, and redacted last error.
+- [x] Support `active`, `checked_out`, `paid`, and `abandoned` cart states; add nullable `paid_at` and `checked_out_at` timestamps.
+- [x] Add the partial unique index allowing at most one active cart per user.
+- [x] Enforce unique `(cart_id, product_id)` and positive `cart_items.quantity`; preserve checkout price/currency snapshots.
+- [x] Add nullable payment URL, provider-initialisation state/retry metadata, failure-scenario code, and `reconcile_after` to `payments`.
+- [x] Enforce unique payment reference, positive checkout amount, and at most one pending payment per cart with a partial unique index.
+- [x] Add payment indexes for owner pagination, cart attempts, reconciliation, and expiry scans.
+- [x] Create `checkout_requests` with unique `(user_id, idempotency_key)`, canonical fingerprint, cart ID, payment ID, and creation time.
+- [x] Create `stock_reservations` with unique `(payment_id, product_id)`, positive quantity, and active/consumed/released states.
+- [x] Create `fulfillments` and `fulfillment_items` with unique payment and cart fulfilment constraints and purchased-item snapshots.
+- [x] Create `provider_events` for webhook/reconciliation evidence, unique webhook event ID, payload/response hash, reference, outcome, and timestamps.
+- [x] Create deduplicated `payment_incidents` with trusted reference/payment linkage, redacted details, code, and resolution timestamp.
+- [x] Create `notification_outbox` with a unique stable queue job key, payload, attempts, next-attempt time, lease, accepted time, and redacted last error.
 - [ ] Add a migration path that safely rebuilds the SQLite carts table if its status check must change.
 - [x] Seed at least one active user, one active admin, and purchasable products; make seeding repeatable without overwriting payments or tokens.
 - [ ] Use Knex schema methods only in migrations and parameterized `knex.raw` with named value bindings for runtime queries.
