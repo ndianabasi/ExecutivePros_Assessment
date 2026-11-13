@@ -15,8 +15,9 @@ Four microservices are proposed within this architecture:
 1. API Service,
 2. Frontend Service,
 3. Message Queue Service,
-4. API Documentation Service, and
-5. Mock Payment Provider Service
+4. API Documentation Service,
+5. Mock Email Service, and
+6. Mock Payment Provider Service
 
 ### 1. API Service
 
@@ -37,6 +38,10 @@ The API Documentation Service will provide an user interface to exploring the fu
 ### 5. Mock Payment Provider Service
 
 The Mock Payment Provider Service will be used to simulate a real payment provider. The Mock Payment Provider will emit webhook events to the API Service. The API Service is expected to handle the different events robustly. The webhook event data will be simplified.
+
+### 6. Mock Email Service
+
+The Mock Email Service will be used to delivery email to interested parties within the system. It will have its own port. The Frontend Service is expected to provide a simple, global interface element for accessing the Mock Email Service within its own interface.
 
 ## Reference-Level Explanations
 
@@ -66,17 +71,16 @@ The schema includes the four requested tables, plus a `cart_items` table to supp
 
 The `users` table stores basic information about users who are authenticated or authorised to perform API operations.
 
-| Name            | Data Type | Constraints                                                   | Description                                                      |
-| --------------- | --------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `id`            | INTEGER   | PRIMARY KEY, AUTOINCREMENT                                    | Unique identifier for each user.                                 |
-| `first_name`    | TEXT      | NOT NULL                                                      | User's first name.                                               |
-| `last_name`     | TEXT      | NOT NULL                                                      | User's last name.                                                |
-| `email`         | TEXT      | NOT NULL, UNIQUE                                              | User's email address, used for authentication and communication. |
-| `password_hash` | TEXT      | NOT NULL                                                      | Securely hashed password used for authentication.                |
-| `role`          | TEXT      | NOT NULL, DEFAULT 'user', CHECK (`role IN ('user', 'admin')`) | Determines the user's authorisation level.                       |
-| `is_active`     | INTEGER   | NOT NULL, DEFAULT 1, CHECK (`is_active IN (0, 1)`)            | Indicates whether the user's account is active.                  |
-| `created_at`    | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                           | Timestamp when the user account was created.                     |
-| `updated_at`    | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                           | Timestamp when the user account was last updated.                |
+| Name         | Data Type | Constraints                                                   | Description                                                      |
+| ------------ | --------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `id`         | INTEGER   | PRIMARY KEY, AUTOINCREMENT                                    | Unique identifier for each user.                                 |
+| `first_name` | TEXT      | NOT NULL                                                      | User's first name.                                               |
+| `last_name`  | TEXT      | NOT NULL                                                      | User's last name.                                                |
+| `email`      | TEXT      | NOT NULL, UNIQUE                                              | User's email address, used for authentication and communication. |
+| `role`       | TEXT      | NOT NULL, DEFAULT 'user', CHECK (`role IN ('user', 'admin')`) | Determines the user's authorisation level.                       |
+| `is_active`  | INTEGER   | NOT NULL, DEFAULT 1, CHECK (`is_active IN (0, 1)`)            | Indicates whether the user's account is active.                  |
+| `created_at` | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                           | Timestamp when the user account was created.                     |
+| `updated_at` | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                           | Timestamp when the user account was last updated.                |
 
 ###### 2.`api.db / payments`
 
@@ -145,7 +149,21 @@ The `cart_items` table establishes the many-to-many relationship between carts a
 
 **Additional table-level constraint:** `UNIQUE (cart_id, product_id)` prevents the same product from appearing in multiple rows within a single cart.
 
-###### 6. Database relationships
+## 6.`api.db / user_tokens`
+
+The `user_tokens` table stores opaque authentication tokens associated with users. Each user can have multiple tokens, allowing authentication across different sessions or devices.
+
+| Name           | Data Type | Constraints                                           | Description                                                                          |
+| -------------- | --------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `id`           | INTEGER   | PRIMARY KEY, AUTOINCREMENT                            | Unique identifier for each token record.                                             |
+| `user_id`      | INTEGER   | NOT NULL, FOREIGN KEY → `users(id)` ON DELETE CASCADE | Identifies the user who owns the token.                                              |
+| `token_hash`   | TEXT      | NOT NULL, UNIQUE                                      | Cryptographic hash of the opaque authentication token.                               |
+| `expires_at`   | TEXT      | NOT NULL                                              | Timestamp after which the token is no longer valid.                                  |
+| `revoked_at`   | TEXT      | NULL                                                  | Timestamp when the token was revoked. NULL indicates the token has not been revoked. |
+| `created_at`   | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                   | Timestamp when the token was generated.                                              |
+| `last_used_at` | TEXT      | NULL                                                  | Timestamp when the token was last used for authentication.                           |
+
+###### 7. Database relationships
 
 Simplified entity relationship diagram. N = many.
 
@@ -156,6 +174,7 @@ The schema supports these relationships:
 - **Carts -> Payments:** One cart can have multiple payment attempts.
 - **Carts -> Cart Items:** One cart can contain multiple cart items.
 - **Products -> Cart Items:** One product can appear in multiple carts.
+- **Users -> User Tokens:** One user can log in multiple times.
 
 ##### Database to be Managed by the Message Queue Service
 
@@ -167,9 +186,73 @@ The tables within the `jobs.db` database will be managed internally by the Messa
 
 #### Required Endpoints
 
+The following endpoints are required:
+
+1. `POST /v1/login`
+
+Logs an existing user in without a password.
+
+2. `GET /v1/products`
+
+Fetches all seeded products (with optional pagination). There will be no endpoint for creating products and no endpoint for fetching a single product.
+
+3. `POST /v1/cart`
+
+Creates a cart (if no active cart exists) and adds the accompanied products to the cart. A user will have only one active cart at a time. An active cart is one which is not checked out yet.
+
+3. `POST /v1/cart/checkout`
+
+Checks out an active cart and initialises the payment flow for the cart.
+
+4. `POST /v1/webhooks/payment`
+
+A webhook event endpoint used by the Mock Payment Provider to notify the API Service of an incoming payment.
+
+5. `GET /v1/payments/:payment_id`
+
+Fetches the complete details of a payment including associated resources.
+
+Access Level: Admin
+
+** NOTE : ** There will be no endpoint for manually updating a payment status. Such an endpoint will be a security flaw. Payment statuses can only be updated during webhook handling or via a CRON job which marks payments which has been in pending state for more 30 days as failed payments.
+
+#### Payment Flow
+
+The payment flow begins with the checkout of an active cart from the Frontend Service or API Documentation Service (client). The checkout process initialises the payment. During payment intialisation:
+
+1. The API service records the initialised payment,
+2. The API service calls the Mock Payment Provider with the total amount and payment reference,
+3. The Mock Payment Provider returns the payment URL to the API service,
+4. The API service proxies the payment URL to the client.
+5. The client visits the payment URL and requires the user to complete the payment.
+6. The Mock Payment Provider receives the completed payment.
+7. The Mock Payment Provider calls the API service with the details of the completed payment.
+8. The API Service verifies the payment details in the webhook event.
+9. If payment is verified, the API service grants value to the user and notifies the Frontend Service via server-sent event. Emails should also be sent to all interested parties.
+10. If payment processing fails, the API service notifies the Frontend Service via server-sent event. Emails should also be sent to all interested parties.
+
+In order to simulate failure cases, the Frontend Service is expected to integrate a integrate a list of failure scenarios to be generated. The selected scenario will be sent with the cart checkout request to the API service. Any scenario which involves the Mock Payment Provider will be forwarded to the Mock Payment Provider during the payment initialisation. The Mock Payment Provider is expected to simulate that failure mode during its webhook event submission to the API Service.
+
+Such failure scenarios include (but not limited to):
+
+1. Simultaneous double checkout of a cart.
+2. Frontend Service client timeout and checkout retry.
+3. Mock Payment Provider connection timeout.
+4. Mock Payment Provider response lost.
+5. Simultaneous duplicate webhooks from Mock API service.
+6. Conflicting webhook events from Mock Payment Provider.
+7. Incorrect payment amount from Mock Payment Provider.
+8. Invalid webhook signature from Mock Payment Provider.
+9. Crash within API service after granting value.
+10. SSE client disconnected.
+
 #### Authentication for Endpoints
 
 #### Access Control for Endpoints
+
+##### User and Roles Management
+
+This architecture is not focused on user or access control managements. Users will be seeded and assigned to roles during seeding. There will be no password-based login from the Frontend Service. Rather, a dropdown list of seeded users will be displayed for the user to choose and login with. The role of user should be displayed against the user on the Frontend Service.
 
 #### Security for Endpoints
 
