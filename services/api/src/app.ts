@@ -28,7 +28,7 @@ function bearer(request: Request): string | null {
 }
 
 function fail(response: Response, status: number, code: string, message: string) {
-  return response.status(status).json({ error: { code, message } })
+  return response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
 }
 
 export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, config }: AppDependencies): Express {
@@ -58,11 +58,9 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
     return response.status(200).json({ status: 'ready' })
   })
 
-  app.get('/v1/demo/users', async (_request, response, next) => {
-    try {
-      response.setHeader('Cache-Control', 'no-store')
-      response.json({ data: await listDemoUsers(db) })
-    } catch (error) { next(error) }
+  app.get('/v1/demo/users', async (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store')
+    response.json({ data: await listDemoUsers(db) })
   })
 
   app.post('/v1/login', async (request, response, next) => {
@@ -118,13 +116,18 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
   if (provider && config) registerCheckoutRoutes(app, db, provider, config)
   if (config) registerWebhookRoutes(app, db, config.providerWebhookSecret)
 
+  app.use((_request: Request, response: Response) => {
+    response.status(404).json({ error: { code: 'not_found', message: 'Route not found', request_id: currentRequestId() } })
+  })
+
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     const parseError = typeof error === 'object' && error !== null && 'type' in error && error.type === 'entity.parse.failed'
     const status = error instanceof HttpError ? error.status : parseError ? 400 : 500
     const code = error instanceof HttpError ? error.code : parseError ? 'invalid_json' : 'internal_error'
     const message = error instanceof HttpError ? error.message : parseError ? 'Request body must be valid JSON' : 'An unexpected error occurred'
     if (status >= 500) logger.error({ request_id: currentRequestId(), error_type: error instanceof Error ? error.name : 'unknown' }, 'request failed')
-    response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
+    const details = error instanceof HttpError ? error.details : undefined
+    response.status(status).json({ error: { code, message, ...(details === undefined ? {} : { details }), request_id: currentRequestId() } })
   })
 
   return app

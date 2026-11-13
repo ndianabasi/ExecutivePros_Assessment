@@ -9,10 +9,10 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Add API-owned Knex CLI scripts for `migrate:up` and local/test-only `migrate:down`; connect them to the root Commander migration orchestration.
 - [ ] Separate routes, VineJS validators, domain services, raw-SQL repositories, provider/queue clients, background jobs, configuration, and logging.
 - [ ] Ensure API runtime code reads and writes only `api.db`, never another service's SQLite file.
-- [ ] Add a typed `Exception`, a consistent `data`/`meta` success envelope, and an `error.code`/`error.message`/`details`/`request_id` error envelope.
-- [ ] Add one global JSON error middleware that handles VineJS errors, expected HTTP errors, and unexpected errors without exposing stack traces or secrets.
-- [ ] Verify rejected asynchronous Express handlers reach the global error middleware.
-- [ ] Define the HTTP status mapping for invalid syntax, authentication, authorization, missing resources, state/idempotency conflicts, inconsistent provider evidence, and temporary failures.
+- [x] Add a typed HTTP exception, consistent `data`/`meta` success responses, and an `error.code`/`error.message`/optional `details`/`request_id` error envelope.
+- [x] Add one global JSON error middleware for expected and unexpected errors; it does not expose stack traces or secrets. VineJS error mapping remains pending until VineJS validators are wired into routes.
+- [x] Verify rejected asynchronous Express handlers reach the global error middleware on Express 5.
+- [x] Define HTTP status mapping for invalid syntax, authentication, authorization, missing resources, state/idempotency conflicts, inconsistent provider evidence, and temporary failures.
 
 ## 2. Configuration, database connection, and lifecycle
 

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Knex } from 'knex'
+import { HttpError } from './errors.js'
 
 export interface AuthUser {
   id: number
@@ -38,7 +39,7 @@ export async function login(db: Knex, userId: number, now = new Date()): Promise
     'SELECT id, first_name, last_name, email, role, is_active FROM users WHERE id = :userId AND is_active = 1',
     { userId },
   ))[0]
-  if (!found) throw Object.assign(new Error('Unknown or inactive demo user'), { status: 401, code: 'invalid_user' })
+  if (!found) throw new HttpError(401, 'invalid_user', 'Unknown or inactive demo user')
 
   const token = randomBytes(32).toString('base64url')
   const tokenHash = createHash('sha256').update(token).digest('hex')
