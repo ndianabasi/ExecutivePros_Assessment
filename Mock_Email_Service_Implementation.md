@@ -37,13 +37,13 @@ Use these fixed demo settings, with no implicit fallback to a temporary inbox:
 | `MP_IGNORE_DUPLICATE_IDS` | `false`, retaining at-least-once delivery evidence. |
 | `MP_SMTP_BIND_ADDR` | `0.0.0.0:1025` inside the container; reachable only from the trusted Compose network. |
 | `MP_SMTP_MAX_RECIPIENTS` | `1`, matching the queue's one-recipient-per-job contract. |
-| `MP_UI_BIND_ADDR` | `0.0.0.0:8025` inside the container; publish as `127.0.0.1:8025:8025` on the host. |
+| `MP_UI_BIND_ADDR` | `0.0.0.0:8025` inside the container; publish as `127.0.0.1:18025:8025` on the host. |
 | `MP_ALLOWED_HOSTS` | `mailpit` for internal UI/API calls; Mailpit also permits loopback host names and addresses. |
 | `MP_DISABLE_VERSION_CHECK` | `true`, avoiding an external update check from the running service. |
 | `MP_BLOCK_REMOTE_CSS_AND_FONTS` | `true`, limiting remote resources when captured HTML is viewed. |
 | `MP_ENABLE_CHAOS` | `false`; do not set `MP_CHAOS_TRIGGERS`. |
 
-Leave SMTP and UI authentication and TLS unset only for this **host-local trusted demo**. Keep `MP_API_CORS`, SMTP relay/forward settings, Send API authentication overrides, and POP3 credentials unset; do not grant cross-origin browser access to Mailpit's API. Do not enable Mailpit options that fetch internal URLs or bypass TLS validation. The queue config uses `SMTP_HOST=mailpit` and `SMTP_PORT=1025`; the frontend runtime config uses `MAILPIT_ORIGIN=http://127.0.0.1:8025`. The latter is a browser URL, not an internal DNS name. [Mailpit documents the SMTP defaults](https://mailpit.axllent.org/docs/usage/sending-messages/), [HTTP host allowlist](https://mailpit.axllent.org/docs/configuration/http/), and [storage/pruning controls](https://mailpit.axllent.org/docs/configuration/email-storage/).
+Leave SMTP and UI authentication and TLS unset only for this **host-local trusted demo**. Keep `MP_API_CORS`, SMTP relay/forward settings, Send API authentication overrides, and POP3 credentials unset; do not grant cross-origin browser access to Mailpit's API. Do not enable Mailpit options that fetch internal URLs or bypass TLS validation. The queue config uses `SMTP_HOST=mailpit` and `SMTP_PORT=1025`; the frontend runtime config uses `MAILPIT_ORIGIN=http://127.0.0.1:18025`. The latter is a browser URL, not an internal DNS name. [Mailpit documents the SMTP defaults](https://mailpit.axllent.org/docs/usage/sending-messages/), [HTTP host allowlist](https://mailpit.axllent.org/docs/configuration/http/), and [storage/pruning controls](https://mailpit.axllent.org/docs/configuration/email-storage/).
 
 Mailpit's local SQLite database uses WAL by default. Keep the volume on a local Docker filesystem and include the database and WAL files in a consistent backup. For upgrades, stop the queue's worker/traffic and Mailpit, take a cold volume backup, then start the replacement image and verify the inbox. Do not copy only `mailpit.db` while Mailpit is writing. No service-owned schema or Knex migrations are added; Mailpit owns any database schema changes. Never run a `down` migration or delete the volume as an upgrade or rollback step.
 
@@ -68,7 +68,7 @@ All gates are mandatory before deployment. Tests use disposable volumes and mail
 | Duplicate evidence | Two successful queue deliveries of the same notification produce two visible Mailpit messages, including when the email Message-ID repeats. |
 | Retention/restart | Messages remain after a Mailpit container restart with the same volume; config inspection proves count and age pruning are disabled. An explicit test-volume reset starts with an empty inbox without touching queue/API volumes. |
 | Capacity/error | An unwritable or full Mailpit volume causes visible startup/readiness or SMTP failure, and logs identify the storage problem without exposing email bodies. No accepted message is claimed unless it appears in the mailbox. |
-| Browser access | A real browser can follow the frontend's Mailpit link to `http://127.0.0.1:8025`; UI and native API work from the Compose host, SMTP is not published, and the UI cannot be reached through a non-loopback host interface. |
+| Browser access | A real browser can follow the frontend's Mailpit link to `http://127.0.0.1:18025`; UI and native API work from the Compose host, SMTP is not published, and the UI cannot be reached through a non-loopback host interface. |
 | Compose end-to-end | With the API, queue, and real Mailpit containers, expected user/admin payment notifications appear for success and failure cases. Interrupt Mailpit, observe queue retry or retained failure state, restore Mailpit, and confirm any eligible retried message is captured without altering payment state. |
 
 The queue's SMTP 4xx/5xx classification is tested against a separate test SMTP server, not Mailpit Chaos. Its test contract must reflect that distinction; Mailpit's gate covers normal capture and service outage/recovery. Record every gate, command, result, and any unrun suite.

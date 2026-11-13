@@ -21,11 +21,12 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 ## 2. Compose topology, ports, and storage
 
 - [ ] Define one private Compose network for internal service calls and use service names only in server-to-server URLs.
-- [ ] Publish frontend HTTP only at `127.0.0.1:8080` mapped to container port `8080`.
-- [ ] Publish API HTTP only at `127.0.0.1:3000` mapped to container port `3000`.
-- [ ] Publish provider HTTP only at `127.0.0.1:3001` mapped to container port `3000`.
-- [ ] Publish docs HTTP only at `127.0.0.1:8081` mapped to container port `8080`.
-- [ ] Publish Mailpit UI/API only at `127.0.0.1:8025` mapped to container port `8025`; keep SMTP `1025` internal.
+- [ ] Require every host-published port to be at least `10000`; keep container/internal ports at their service-defined values.
+- [ ] Publish frontend HTTP only at `127.0.0.1:18080` mapped to container port `8080`.
+- [ ] Publish API HTTP only at `127.0.0.1:18083` mapped to container port `3000`.
+- [ ] Publish provider HTTP only at `127.0.0.1:18082` mapped to container port `3000`.
+- [ ] Publish docs HTTP only at `127.0.0.1:18081` mapped to container port `8080`.
+- [ ] Publish Mailpit UI/API only at `127.0.0.1:18025` mapped to container port `8025`; keep SMTP `1025` internal.
 - [ ] Keep queue HTTP port `3000` internal with no host publication.
 - [ ] Create project-scoped named volumes `assessment_data` and `mailpit_data`; do not give either a fixed global name.
 - [ ] Create shared-volume subdirectories `api`, `queue`, and `provider` before mounting a Compose `volume.subpath`.
@@ -49,9 +50,9 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [ ] Preserve existing secret files on restart; never silently rotate them.
 - [ ] Fail preflight when persistent data exists but a required secret file is missing; do not generate a replacement secret over existing data.
 - [ ] Keep secret values out of Git, images, public runtime config, URLs, logs, test reports, and `docker compose config` output.
-- [ ] Set frontend browser config to API `http://127.0.0.1:3000`, provider `http://127.0.0.1:3001`, docs `http://127.0.0.1:8081`, and Mailpit `http://127.0.0.1:8025`.
-- [ ] Set docs browser `API_ORIGIN` to `http://127.0.0.1:3000` and verify the live OpenAPI effective server URL matches it exactly.
-- [ ] Add/pass `API_PUBLIC_ORIGIN=http://127.0.0.1:3000` as the API's OpenAPI server URL configuration contract.
+- [ ] Set frontend browser config to API `http://127.0.0.1:18083`, provider `http://127.0.0.1:18082`, docs `http://127.0.0.1:18081`, and Mailpit `http://127.0.0.1:18025`.
+- [ ] Set docs browser `API_ORIGIN` to `http://127.0.0.1:18083` and verify the live OpenAPI effective server URL matches it exactly.
+- [ ] Add/pass `API_PUBLIC_ORIGIN=http://127.0.0.1:18083` as the API's OpenAPI server URL configuration contract.
 - [ ] Set API `FRONTEND_ORIGIN` and `DOCS_ORIGIN` to the published browser origins; use internal `http://provider:3000` and `http://queue:3000` for outbound service calls.
 - [ ] Set provider public origin and frontend origin to browser URLs; set its fixed webhook target to `http://api:3000/v1/webhooks/payment`.
 - [ ] Set queue SMTP target to `mailpit:1025`; configure Mailpit's local UI host allowlist without adding browser API CORS.

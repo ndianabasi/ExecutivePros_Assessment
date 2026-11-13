@@ -14,7 +14,7 @@ test('checkout persists reservations and returns one provider attempt for idempo
   const first = await client.post('/v1/cart/checkout').header('Authorization', `Bearer ${token}`).header('Idempotency-Key', 'checkout-key-0001').json({ failure_scenario_code: 'PROVIDER_001' })
   assert.equal(first.status(), 201)
   assert.equal(first.body().data.amount_minor, 500000)
-  assert.equal(first.body().data.payment_url, 'http://127.0.0.1:8082/checkout/mock-token')
+  assert.equal(first.body().data.payment_url, 'http://127.0.0.1:18082/checkout/mock-token')
   assert.equal(await db('payments').count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
   assert.equal(await db('stock_reservations').where({ status: 'active' }).sum({ quantity: 'quantity' }).then((rows) => Number(rows[0]?.quantity)), 2)
   const products = await client.get('/v1/products').header('Authorization', `Bearer ${token}`)
@@ -23,7 +23,7 @@ test('checkout persists reservations and returns one provider attempt for idempo
   assert.equal(attempts.body().data.payments.length, 1)
   const ownPayments = await client.get('/v1/payments').header('Authorization', `Bearer ${token}`)
   assert.equal(ownPayments.body().meta.total, 1)
-  assert.equal(ownPayments.body().data[0].payment_url, 'http://127.0.0.1:8082/checkout/mock-token')
+  assert.equal(ownPayments.body().data[0].payment_url, 'http://127.0.0.1:18082/checkout/mock-token')
   assert.equal(ownPayments.header('cache-control'), 'no-store')
 
   const otherLogin = await client.post('/v1/login').json({ user_id: 3 })

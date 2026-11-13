@@ -7,6 +7,8 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 ## Durable decisions
 
 - Trusted host-local demo only. Bind browser ports to `127.0.0.1`; keep service calls on Compose DNS.
+- Every published host port must be at least `10000`; current assignments are frontend `18080`, docs `18081`, provider `18082`, API `18083`, and Mailpit UI `18025`. Container ports and private SMTP/test ports remain service-specific.
+- On this Docker Desktop setup, Compose `internal: true` prevented a loopback-published Mailpit UI from accepting host connections. Use the project-scoped bridge network and publish only explicit loopback host ports; keep SMTP unpublished.
 - Six regular services: API, frontend, queue, docs, Mailpit, provider. One Dockerfile and one running container per service. One-shot setup/migration containers must be removed.
 - One project-scoped SQLite volume uses distinct `api`, `queue`, and `provider` volume subpaths. Each non-root service sees only its own `/data`; Mailpit has a separate volume.
 - No service reads another service's database. The root CLI orchestrates Docker and service-owned migrations only.
@@ -25,6 +27,8 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 - Frontend and docs use browser origins; API/provider/queue use fixed internal Compose origins for service calls. OpenAPI `servers` equals `API_PUBLIC_ORIGIN`.
 - The frontend, docs UI, and API use local-storage selection/token behavior as specified in their plans. API/queue/provider accept mounted `*_FILE` secrets.
 - Mailpit accepts queue SMTP only on the Compose network; its UI is host-loopback only. Never configure a real SMTP relay.
+- Mailpit `v1.33.1` is built from upstream commit `3bc38efc5c4687659b9099eb2c8d8f6e76113f11`. The local arm64 build used Alpine base digest `sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf` and produced image `sha256:e4b8f2c4d82c17e3ebdbaa8b59688ac420c94c67127745e079b5c441cf336901` (`10001:10001`). These are local build evidence, not a multi-platform release manifest.
+- The existing default Compose Mailpit volume `executivepros_assessment_mailpit_data` contains prior inbox messages. The original container is stopped. Never reset or reuse this volume for tests; use a unique Compose project and remove only that project's disposable volume.
 
 ## Validation and workflow
 

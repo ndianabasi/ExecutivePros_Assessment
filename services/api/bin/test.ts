@@ -65,7 +65,7 @@ async function setupApiTest(testCase: Test) {
       amount: request.body.amount,
       currency: request.body.currency,
       status: 'pending',
-      payment_url: `http://127.0.0.1:8082/checkout/mock-token`,
+      payment_url: `http://127.0.0.1:18082/checkout/mock-token`,
       checkout_expires_at: request.body.checkout_expires_at,
       } })
     })
@@ -75,8 +75,8 @@ async function setupApiTest(testCase: Test) {
 
     const fixtureConfig = loadConfig({
       NODE_ENV: 'test', PORT: '3000', API_DB_PATH: '/data/api.db',
-      API_PUBLIC_ORIGIN: 'http://127.0.0.1:3000', FRONTEND_ORIGIN: 'http://127.0.0.1:8080', DOCS_ORIGIN: 'http://127.0.0.1:8081',
-      PROVIDER_BASE_URL: providerUrl, PROVIDER_PUBLIC_ORIGIN: 'http://127.0.0.1:8082',
+      API_PUBLIC_ORIGIN: 'http://127.0.0.1:18083', FRONTEND_ORIGIN: 'http://127.0.0.1:18080', DOCS_ORIGIN: 'http://127.0.0.1:18081',
+      PROVIDER_BASE_URL: providerUrl, PROVIDER_PUBLIC_ORIGIN: 'http://127.0.0.1:18082',
       QUEUE_BASE_URL: 'http://queue:3000', PROVIDER_WEBHOOK_SECRET: 'a'.repeat(32),
       PROVIDER_SERVICE_SECRET: 'b'.repeat(32), QUEUE_SERVICE_SECRET: 'c'.repeat(32),
       PROVIDER_TIMEOUT_MS: '1000', PROVIDER_INIT_BACKOFF_MS: '1', SQLITE_LOCK_BACKOFF_MS: '1',

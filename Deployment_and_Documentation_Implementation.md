@@ -21,15 +21,15 @@ Create a root Yarn workspace and a root Commander deployment CLI with documented
 
 Use multi-stage builds and copy only runtime files into each final image. Pin image tags to complete patch versions and record resolved image digests in release evidence; a floating `latest` tag, unreviewed digest change, or non-Alpine prebuilt Mailpit/Swagger runtime image fails the artifact gate. Build native SQLite modules against the runtime Alpine/musl family. Run every regular container as non-root, with write access only to its mounted data or runtime-config/temporary paths. Keep source, build contexts, secret files, test fixtures, and database volumes out of final images unless required at runtime. The Mailpit and Swagger UI version choices remain those in their service documents until a reviewed upgrade.
 
-Define one private Compose network for container-to-container calls. Use explicit loopback host bindings and browser-reachable origins; never place Compose DNS names in frontend/docs browser config, provider payment URLs, or the API OpenAPI `servers` field. The default local port map is:
+Define one project-scoped Compose bridge network for container-to-container calls. Use explicit loopback host bindings and browser-reachable origins; never place Compose DNS names in frontend/docs browser config, provider payment URLs, or the API OpenAPI `servers` field. Every host-published port must be at least `10000`; container ports remain service-specific. The default local port map is:
 
 | Compose service | Container endpoint | Host endpoint | Persistent data and health |
 | --- | --- | --- | --- |
-| `frontend` | HTTP `8080` | `http://127.0.0.1:8080` | No database; its own static/config health check. |
-| `api` | HTTP `3000` | `http://127.0.0.1:3000` | `assessment_data` subpath `api` at `/data`, `API_DB_PATH=/data/api.db`; `/health/live` and `/health/ready`. |
-| `provider` | HTTP `3000` | `http://127.0.0.1:3001` | Subpath `provider` at `/data`, `PROVIDER_DB_PATH=/data/payment_provider.db`; `/health/live` and `/health/ready`. |
-| `docs` | HTTP `8080` | `http://127.0.0.1:8081` | No database; `/health/live` and `/health/ready`. |
-| `mailpit` | UI/API `8025`, SMTP `1025` | UI/API `http://127.0.0.1:8025` only | `mailpit_data`; `/livez` and `/readyz`. SMTP is not host-published. |
+| `frontend` | HTTP container `8080`, host `18080` | `http://127.0.0.1:18080` | No database; its own static/config health check. |
+| `api` | HTTP container `3000`, host `18083` | `http://127.0.0.1:18083` | `assessment_data` subpath `api` at `/data`, `API_DB_PATH=/data/api.db`; `/health/live` and `/health/ready`. |
+| `provider` | HTTP container `3000`, host `18082` | `http://127.0.0.1:18082` | Subpath `provider` at `/data`, `PROVIDER_DB_PATH=/data/payment_provider.db`; `/health/live` and `/health/ready`. |
+| `docs` | HTTP container `8080`, host `18081` | `http://127.0.0.1:18081` | No database; `/health/live` and `/health/ready`. |
+| `mailpit` | UI/API `8025`, SMTP `1025` | UI/API `http://127.0.0.1:18025` only | `mailpit_data`; `/livez` and `/readyz`. SMTP is not host-published. |
 | `queue` | HTTP `3000` | None | Subpath `queue` at `/data`, `JOBS_DB_PATH=/data/jobs.db`; `/health/live` and `/health/ready`. |
 
 The root CLI must create `assessment_data` and its three subdirectories **before** Compose mounts `volume.subpath`; those paths must already exist. Use a removed, exact Alpine-pinned setup container mounting the volume root to create `api`, `queue`, and `provider` with distinct fixed service UIDs/GIDs (`10001`, `10002`, `10003`) and mode `0700`. The parent directory must not be writable by service users. The regular Compose mounts use long-form `volume.subpath` with `nocopy: true` to expose only the owned directory at `/data`; no service can read another database through its mount. The documented local baseline is Docker Compose `v5.2.0`; preflight must fail if the installed version cannot render and mount these subpaths. Verify with `docker compose config` and a real mount test. [Compose volume subpaths](https://docs.docker.com/reference/compose-file/services/#volumes) retain the service documents' `/data/<database>.db` paths while sharing one backup unit.
@@ -44,10 +44,10 @@ The root configuration maps browser origins and internal addresses separately:
 
 | Consumer | Required value |
 | --- | --- |
-| Frontend runtime config | `API_ORIGIN=http://127.0.0.1:3000`, `PROVIDER_ORIGIN=http://127.0.0.1:3001`, `DOCS_ORIGIN=http://127.0.0.1:8081`, `MAILPIT_ORIGIN=http://127.0.0.1:8025`. |
-| Docs runtime config | `API_ORIGIN=http://127.0.0.1:3000`; the live OpenAPI effective server URL must match exactly. |
-| API runtime config | `FRONTEND_ORIGIN=http://127.0.0.1:8080`, `DOCS_ORIGIN=http://127.0.0.1:8081`, `PROVIDER_BASE_URL=http://provider:3000`, `QUEUE_BASE_URL=http://queue:3000`. Supply `API_PUBLIC_ORIGIN=http://127.0.0.1:3000` to render the browser-reachable OpenAPI `servers` value; this is a required API configuration contract to add alongside its existing settings. |
-| Provider runtime config | `PROVIDER_PUBLIC_ORIGIN=http://127.0.0.1:3001`, `FRONTEND_ORIGIN=http://127.0.0.1:8080`, `API_WEBHOOK_URL=http://api:3000/v1/webhooks/payment`. |
+| Frontend runtime config | `API_ORIGIN=http://127.0.0.1:18083`, `PROVIDER_ORIGIN=http://127.0.0.1:18082`, `DOCS_ORIGIN=http://127.0.0.1:18081`, `MAILPIT_ORIGIN=http://127.0.0.1:18025`. |
+| Docs runtime config | `API_ORIGIN=http://127.0.0.1:18083`; the live OpenAPI effective server URL must match exactly. |
+| API runtime config | `FRONTEND_ORIGIN=http://127.0.0.1:18080`, `DOCS_ORIGIN=http://127.0.0.1:18081`, `PROVIDER_BASE_URL=http://provider:3000`, `QUEUE_BASE_URL=http://queue:3000`. Supply `API_PUBLIC_ORIGIN=http://127.0.0.1:18083` to render the browser-reachable OpenAPI `servers` value; this is a required API configuration contract to add alongside its existing settings. |
+| Provider runtime config | `PROVIDER_PUBLIC_ORIGIN=http://127.0.0.1:18082`, `FRONTEND_ORIGIN=http://127.0.0.1:18080`, `API_WEBHOOK_URL=http://api:3000/v1/webhooks/payment`. |
 | Queue and Mailpit | Queue uses `SMTP_HOST=mailpit`, `SMTP_PORT=1025`; Mailpit listens internally on `1025` and `8025` and allows only the expected local UI host. |
 
 Check API CORS for the frontend and docs origins and `Authorization`, `Content-Type`, and `Idempotency-Key`; do not add browser CORS to Mailpit. Verify frontend `connect-src`/`frame-src`, provider `frame-ancestors`, and docs `connect-src` against these origins. The frontend's docs/Mailpit links open the configured browser URLs; the provider URL given to the browser uses its public origin; service-to-service authentication uses the fixed internal URLs. A wrong-origin OpenAPI document or provider URL blocks the browser flow rather than being silently rewritten.

@@ -5,11 +5,11 @@ const validConfig: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
   PORT: '3000',
   API_DB_PATH: '/data/api.db',
-  API_PUBLIC_ORIGIN: 'http://127.0.0.1:3000',
-  FRONTEND_ORIGIN: 'http://127.0.0.1:8080',
-  DOCS_ORIGIN: 'http://127.0.0.1:8081',
+  API_PUBLIC_ORIGIN: 'http://127.0.0.1:18083',
+  FRONTEND_ORIGIN: 'http://127.0.0.1:18080',
+  DOCS_ORIGIN: 'http://127.0.0.1:18081',
   PROVIDER_BASE_URL: 'http://provider:3000',
-  PROVIDER_PUBLIC_ORIGIN: 'http://127.0.0.1:8082',
+  PROVIDER_PUBLIC_ORIGIN: 'http://127.0.0.1:18082',
   QUEUE_BASE_URL: 'http://queue:3000',
   PROVIDER_WEBHOOK_SECRET: 'a'.repeat(32),
   PROVIDER_SERVICE_SECRET: 'b'.repeat(32),
@@ -19,7 +19,7 @@ const validConfig: NodeJS.ProcessEnv = {
 test('loads an API configuration with explicit origins and secrets', ({ assert }) => {
   const config = loadConfig(validConfig)
   assert.equal(config.port, 3000)
-  assert.equal(config.apiPublicOrigin, 'http://127.0.0.1:3000')
+  assert.equal(config.apiPublicOrigin, 'http://127.0.0.1:18083')
   assert.equal(config.dbPath, '/data/api.db')
 })
 

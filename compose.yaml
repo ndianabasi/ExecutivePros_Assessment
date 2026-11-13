@@ -1,0 +1,48 @@
+services:
+  mailpit:
+    build:
+      context: ./services/mock-email
+      dockerfile: Dockerfile
+    image: executivepros-mailpit:v1.33.1
+    init: true
+    restart: unless-stopped
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: "0"
+      MP_MAX_MESSAGE_SIZE: "1"
+      MP_IGNORE_DUPLICATE_IDS: "false"
+      MP_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MP_SMTP_MAX_RECIPIENTS: "1"
+      MP_UI_BIND_ADDR: 0.0.0.0:8025
+      MP_ALLOWED_HOSTS: mailpit
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_BLOCK_REMOTE_CSS_AND_FONTS: "true"
+      MP_ENABLE_CHAOS: "false"
+    ports:
+      - "127.0.0.1:18025:8025"
+    volumes:
+      - mailpit_data:/data
+    networks:
+      - assessment
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8025/livez && wget -q -O /dev/null http://127.0.0.1:8025/readyz
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+networks:
+  assessment:
+    driver: bridge
+
+volumes:
+  mailpit_data:
