@@ -53,6 +53,14 @@ The flowchart below presents the relationship between the four (4) proposed micr
 
 ![Microservices Flowchart](microservice_architecture.png)
 
+### Code Organisation and Developer Tooling
+
+The code is to be organised as a monorepo consisting of distinct projects. Each project is a microservice described in this document.
+
+`Yarn` should be used to manage the monorepo.
+
+Each microservice must be a sub
+
 ### Database and Data Models
 
 #### Database Engine
@@ -301,6 +309,16 @@ The following scenarios can be seeded into the `failure_scenarios` table.
 1. The payment lifecycle should be separate from the webhook delivery lifecycle. A payment may be successfully completed at the provider while its webhook delivery fails, so the two statuses must be tracked independently.
 2. The `payments` table should store the authoritative simulated payment outcome. The `webhook_events` table should capture immutable event payloads, while `webhook_deliveries` records individual delivery attempts and their results. For testing malformed or modified payloads, store the original event separately from the actual transmitted request, or extend delivery records to capture the transmitted payload.
 3. For deterministic simulations, resolve and snapshot the selected failure configuration when a payment is initialised. This avoids later changes to a predefined scenario unexpectedly changing the behaviour of an existing payment. Provider-initialisation failures that happen before a payment is persisted may require a separate request log if you need to inspect those failures.
+
+#### Database Migrations and Queries
+
+The Knex.js library should be exclusively used for database queries. Knex.js' query builder methods are allowed only during table migrations. Other than migrations, all queries should use `knex.raw` with raw highly-optimised raw SQL strings and named bindings.
+
+Knex.js should be used for generating and running table migrations for all microservices. Within each microservice's directory, a `database/migrations` directory should be maintained to contain all migration files for the microservice.
+
+The `knex.js` CLI (bundled with Knex.js within each microservice's `node_modules`) should be used to run the `up` and `down` migrations per microservice. Commander (https://www.npmjs.com/package/commander) should be used to aggregate all the migrations for all microservices into a single `up` or `down` command.
+
+During production deployment (via Docker Compose), a deployment script should be used to run the `up` migrations across all microservices before the docker services are started. `down` migrations must be disallowed in production.
 
 ### API Service Design
 
