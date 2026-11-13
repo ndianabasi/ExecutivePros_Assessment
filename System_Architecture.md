@@ -14,8 +14,9 @@ Four microservices are proposed within this architecture:
 
 1. API Service,
 2. Frontend Service,
-3. Message Queue Service, and
-4. API Documentation Service.
+3. Message Queue Service,
+4. API Documentation Service, and
+5. Mock Payment Provider Service
 
 ### 1. API Service
 
@@ -32,6 +33,10 @@ The Message Queue Service will provide an asynchronous messaging queue which the
 ### 4. API Documentation Service
 
 The API Documentation Service will provide an user interface to exploring the functionalities of the endpoints exposed by the API service.
+
+### 5. Mock Payment Provider Service
+
+The Mock Payment Provider Service will be used to simulate a real payment provider. The Mock Payment Provider will emit webhook events to the API Service. The API Service is expected to handle the different events robustly. The webhook event data will be simplified.
 
 ## Reference-Level Explanations
 
@@ -186,6 +191,8 @@ The tables within the `jobs.db` database will be managed internally by the Messa
 ### Frontend Service Design
 
 ### API Documentation Service Design
+
+### Mock Payment Provider Design
 
 ### Miscellaneous Designs
 
