@@ -17,6 +17,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 ## 2. Configuration, database connection, and lifecycle
 
 - [x] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_PUBLIC_ORIGIN`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
+- [x] Load configuration with `dotenv` from repository-root `.env` for development and `.env.test` for tests; keep both ignored and provide nonsecret example files.
 - [x] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
 - [ ] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
 - [ ] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
@@ -163,7 +164,8 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
 - [ ] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
 - [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
-- [ ] Use Japa assertions and lifecycle hooks to create/clean deterministic fixtures, isolated temporary SQLite files, and an ephemeral Express listener for Japa API-client HTTP tests.
+- [x] Register Japa assert/API-client plugins centrally, configure the client base URL from `.env.test`, and expose common test helpers through macros in the Japa test context.
+- [x] Use the integration suite before hook to migrate/seed a fresh temporary SQLite file and start HTTP fixtures on distinct high ports from `.env.test` per test; return one cleanup function from the hook. Keep test bodies free of database/server provisioning.
 - [ ] Run migration checks in Japa `integration`, provider/queue and OpenAPI checks in `contract`, and real disposable Compose/child-process/proxy recovery checks in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret scan, and OpenAPI validation all pass with zero failures.
 - [ ] **Migration/seed:** fresh `up`, repeatable seed, disposable-data `down` and second `up` pass; real SQLite files prove foreign keys, checks, unique/partial indexes, and schema version.

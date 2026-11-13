@@ -7,6 +7,7 @@ import { currentRequestId, logger, requestLogging } from './logging.js'
 import { registerCheckoutRoutes } from './checkout.js'
 import { ProviderClient } from './provider.js'
 import type { ApiConfig } from './config.js'
+import { registerWebhookRoutes } from './webhooks.js'
 
 export interface AppDependencies {
   db: Knex
@@ -43,6 +44,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
     if (request.method === 'OPTIONS') return response.sendStatus(204)
     next()
   })
+  app.use('/v1/webhooks/payment', express.raw({ type: 'application/json', limit: '32kb' }))
   app.use(express.json({ limit: '64kb', strict: true }))
 
   app.get('/health/live', (_request: Request, response: Response) => {
@@ -106,6 +108,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
 
   registerCartRoutes(app, db)
   if (provider && config) registerCheckoutRoutes(app, db, provider, config)
+  if (config) registerWebhookRoutes(app, db, config.providerWebhookSecret)
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     const parseError = typeof error === 'object' && error !== null && 'type' in error && error.type === 'entity.parse.failed'

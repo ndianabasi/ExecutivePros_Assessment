@@ -1,3 +1,4 @@
+import './src/load-env.js'
 import type { Knex } from 'knex'
 
 const config: Knex.Config = {

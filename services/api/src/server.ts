@@ -1,3 +1,4 @@
+import './load-env.js'
 import { createApp } from './app.js'
 import { loadConfig } from './config.js'
 import { createDatabase, verifyDatabase } from './db.js'

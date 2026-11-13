@@ -20,6 +20,7 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 
 - Provider initialization is `POST /payments/initialise`, accepts immutable `checkout_expires_at`, and supports idempotent same-reference retries. Status lookup is `GET /payments/:reference`; delayed initialization can be temporarily absent.
 - API checkout validates returned provider `payment_url` against explicit `PROVIDER_PUBLIC_ORIGIN`; internal provider calls use `PROVIDER_BASE_URL`.
+- The API loads repository-root `.env` through `dotenv` before importing configuration; `.env` stays ignored, `.env.example` contains only nonsecret defaults and mounted secret-file paths, and shell/Compose variables take precedence.
 - API checkout uses required `Idempotency-Key`; payment reads expose a ready provider URL after an earlier `202`; browser payment state is fetched without stale caching.
 - Frontend and docs use browser origins; API/provider/queue use fixed internal Compose origins for service calls. OpenAPI `servers` equals `API_PUBLIC_ORIGIN`.
 - The frontend, docs UI, and API use local-storage selection/token behavior as specified in their plans. API/queue/provider accept mounted `*_FILE` secrets.
@@ -31,3 +32,11 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 - Run the smallest meaningful suite for the changed slice, then required service and Compose gates when dependencies are ready. Record commands/results and unrun gates.
 - Use `git diff --check` and inspect `git status` before committing; do not include unrelated or user-owned changes.
 - Keep this file updated only with durable findings that will help later implementation stages.
+
+## Japa integration test convention
+
+- Every Node service workspace using Japa owns `bin/test.ts`; register the assert and API-client plugins there, declare named suites there, and run all scripts through that one entry point.
+- In each Japa integration suite's `configure` hook, attach per-test setup with `suite.onTest(testCase => testCase.setup(...))`. That setup creates a fresh temporary file-backed database, runs the service migrations and idempotent seed, starts required HTTP fixtures on the distinct high loopback ports from `.env.test`, and returns one cleanup function that closes servers, destroys database connections, and removes the temp directory.
+- Put shared setup and service helpers in test macros. Import the macro from tests to expose the fixture DB and common functionality through the Japa test context. Register the Japa API client centrally with the API test base URL; tests use route-relative paths. Keep `.env.test` ignored and provide `.env.test.example` with nonsecret high-port defaults distinct from development ports.
+- Integration test bodies may insert rows needed for their scenario but must not provision/tear down databases or servers themselves. Unit tests remain isolated from this integration fixture. Use Japa per-test hooks for scenario-specific setup and cleanup.
+- Read the current Japa docs for [installation](https://japa.dev/docs/installation), [test macros](https://japa.dev/docs/test-macros), [API client](https://japa.dev/docs/plugins/api-client), [assertions](https://japa.dev/docs/plugins/assert), and [lifecycle hooks](https://japa.dev/docs/lifecycle-hooks) when adapting this convention to a service.
