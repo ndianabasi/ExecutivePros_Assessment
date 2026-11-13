@@ -531,7 +531,9 @@ For simplicity, the Message Queue Service shall expose only a single endpoint fo
 
 ### Frontend Service Design
 
-The Frontend Service will be a React application with the following routes:
+The Frontend Service will be a React single-page application using `shadcn/ui` for components and design system.
+
+It will have the following routes:
 
 1. Home route (`/`) which redirects to `/login` route if visitor is not authenticated.
 2. Login route (`/login`) for login. A successful login redirects to `/products` route.
