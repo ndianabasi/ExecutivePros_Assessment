@@ -388,6 +388,8 @@ Such failure scenarios include (but not limited to):
 9. Crash within API service after granting value.
 10. SSE client disconnected.
 
+For each failure scenario, the user or admins MUST by notified via the Frontend Service or Email on how the failures were handled. Notifications which are meant for admins as a result of actions by a non-admin should be sent to the admins via email only.
+
 #### Authentication for Endpoints
 
 - All endpoints shall require authentication.
@@ -575,9 +577,15 @@ The Mock Payment Provider shall accompany all its request to the API service wit
 
 #### Frontend Service Test Gate
 
-### Deployment
+### Deployment and Documentation
 
-All microservices described in this document shall be deployed as containerised services via a Docker Compose file and Dockerfiles. There shall be one container per service.
+All microservices described in this document shall be deployed as containerised services via a Docker Compose file and a single Dockerfile per service. There shall be one container per service. All services must be based on light latest Alpine images pinned at the patch versions. Pre-built images of open-source libraries which are not based on Alpine images should not be used.
+
+The README must contain:
+
+- Summary of the system architecture
+- How to run the microservices.
+- How to navigate the payment flow and trigger failure scenarios.
 
 ### Alternatives
 
