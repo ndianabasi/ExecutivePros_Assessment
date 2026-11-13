@@ -168,6 +168,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
 - [x] Register Japa assert/API-client plugins centrally, configure the client base URL from `.env.test`, and expose common test helpers through macros in the Japa test context.
 - [x] Use the integration suite before hook to migrate/seed a fresh temporary SQLite file and start HTTP fixtures on distinct high ports from `.env.test` per test; return one cleanup function from the hook. Keep test bodies free of database/server provisioning.
+- [ ] Keep the provider HTTP mock for fast API integration tests, and add an API end-to-end suite that bootstraps the real Mock Payment Provider service in test mode and calls it over HTTP; do not use the provider mock in that suite.
 - [ ] Run migration checks in Japa `integration`, provider/queue and OpenAPI checks in `contract`, and real disposable Compose/child-process/proxy recovery checks in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret scan, and OpenAPI validation all pass with zero failures.
 - [ ] **Migration/seed:** fresh `up`, repeatable seed, disposable-data `down` and second `up` pass; real SQLite files prove foreign keys, checks, unique/partial indexes, and schema version.
