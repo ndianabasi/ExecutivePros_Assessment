@@ -4,12 +4,17 @@ import { authenticate, listDemoUsers, login, logout } from './auth.js'
 import { registerCartRoutes } from './carts.js'
 import { HttpError } from './errors.js'
 import { currentRequestId, logger, requestLogging } from './logging.js'
+import { registerCheckoutRoutes } from './checkout.js'
+import { ProviderClient } from './provider.js'
+import type { ApiConfig } from './config.js'
 
 export interface AppDependencies {
   db: Knex
   isReady: () => boolean | Promise<boolean>
   frontendOrigin: string
   docsOrigin: string
+  provider?: ProviderClient
+  config?: ApiConfig
 }
 
 function bearer(request: Request): string | null {
@@ -23,7 +28,7 @@ function fail(response: Response, status: number, code: string, message: string)
   return response.status(status).json({ error: { code, message } })
 }
 
-export function createApp({ db, isReady, frontendOrigin, docsOrigin }: AppDependencies): Express {
+export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, config }: AppDependencies): Express {
   const app = express()
   app.disable('x-powered-by')
   app.use(requestLogging)
@@ -100,6 +105,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin }: AppDepend
   })
 
   registerCartRoutes(app, db)
+  if (provider && config) registerCheckoutRoutes(app, db, provider, config)
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     const parseError = typeof error === 'object' && error !== null && 'type' in error && error.type === 'entity.parse.failed'

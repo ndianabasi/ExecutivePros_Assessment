@@ -19,6 +19,7 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 ## Cross-service contracts to keep aligned
 
 - Provider initialization is `POST /payments/initialise`, accepts immutable `checkout_expires_at`, and supports idempotent same-reference retries. Status lookup is `GET /payments/:reference`; delayed initialization can be temporarily absent.
+- API checkout validates returned provider `payment_url` against explicit `PROVIDER_PUBLIC_ORIGIN`; internal provider calls use `PROVIDER_BASE_URL`.
 - API checkout uses required `Idempotency-Key`; payment reads expose a ready provider URL after an earlier `202`; browser payment state is fetched without stale caching.
 - Frontend and docs use browser origins; API/provider/queue use fixed internal Compose origins for service calls. OpenAPI `servers` equals `API_PUBLIC_ORIGIN`.
 - The frontend, docs UI, and API use local-storage selection/token behavior as specified in their plans. API/queue/provider accept mounted `*_FILE` secrets.

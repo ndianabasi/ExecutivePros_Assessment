@@ -16,7 +16,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 2. Configuration, database connection, and lifecycle
 
-- [x] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
+- [x] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_PUBLIC_ORIGIN`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
 - [x] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
 - [ ] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
 - [ ] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
@@ -86,23 +86,23 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Implement `DELETE /v1/cart` to abandon only an active cart and return `204`.
 - [x] Recompute active-cart totals from persisted server prices after each edit; reject inactive products, currency mismatch, and unavailable quantity.
 - [ ] Implement `GET /v1/carts/:cart_id` for owner/admin access to cart items and payment attempts, including retry and page-refresh use.
-- [ ] Implement `GET /v1/failure-scenarios` using the provider's active catalogue, returning `503` when unavailable.
-- [ ] Validate checkout scenario codes against that catalogue and pass only the selected code to the provider.
+- [x] Implement `GET /v1/failure-scenarios` using the provider's active catalogue, returning `503` when unavailable.
+- [x] Validate checkout scenario codes against that catalogue and pass only the selected code to the provider.
 
 ## 7. Checkout, idempotency, and provider initialisation
 
-- [ ] Require and validate a bounded `Idempotency-Key` for `POST /v1/cart/checkout`; validate optional cart ID and scenario code.
-- [ ] Persist a canonical user/cart/scenario request fingerprint and the key-to-payment mapping.
-- [ ] Resolve a replay with omitted `cart_id` through its stored mapping; return the same attempt for the same key and `409` for a changed fingerprint.
-- [ ] Select the active cart, an explicitly selected checked-out cart, or the sole pending checked-out cart when no cart ID is supplied; require cart ID if selection is ambiguous.
-- [ ] Under `BEGIN IMMEDIATE`, verify ownership, cart state, items, active products, available stock, currency, and positive server-calculated total.
-- [ ] Reuse an existing pending payment for a compatible new key; prevent a second pending payment and reservation set for the cart.
-- [ ] For a new attempt, create one unique reference, immutable amount/item snapshots, reservations, pending payment, and idempotency mapping in one transaction.
-- [ ] Mark an active cart checked out at first attempt; keep a failed/cancelled cart available for a new attempt with a **new** key/reference.
-- [ ] Call idempotent provider `POST /payments/initialise` outside the transaction with reference, amount, currency, immutable `checkout_expires_at`, and selected scenario.
-- [ ] Apply provider timeout, bounded transient retries, exponential backoff, and permanent-error classification.
-- [ ] Persist a returned provider URL; reject any client-supplied URL or arbitrary-host redirect.
-- [ ] After a lost provider response, query by reference and recover URL/outcome or retry with the **same** reference.
+- [x] Require and validate a bounded `Idempotency-Key` for `POST /v1/cart/checkout`; validate optional cart ID and scenario code.
+- [x] Persist a canonical user/cart/scenario request fingerprint and the key-to-payment mapping.
+- [x] Resolve a replay with omitted `cart_id` through its stored mapping; return the same attempt for the same key and `409` for a changed fingerprint.
+- [x] Select the active cart, an explicitly selected checked-out cart, or the sole pending checked-out cart when no cart ID is supplied; require cart ID if selection is ambiguous.
+- [x] Under `BEGIN IMMEDIATE`, verify ownership, cart state, items, active products, available stock, currency, and positive server-calculated total.
+- [x] Reuse an existing pending payment for a compatible new key; prevent a second pending payment and reservation set for the cart.
+- [x] For a new attempt, create one unique reference, immutable amount/item snapshots, reservations, pending payment, and idempotency mapping in one transaction.
+- [x] Mark an active cart checked out at first attempt; keep a failed/cancelled cart available for a new attempt with a **new** key/reference.
+- [x] Call idempotent provider `POST /payments/initialise` outside the transaction with reference, amount, currency, immutable `checkout_expires_at`, and selected scenario.
+- [x] Apply provider timeout, bounded transient retries, exponential backoff, and permanent-error classification.
+- [x] Persist a returned provider URL; reject any client-supplied URL or arbitrary-host redirect.
+- [x] After a lost provider response, query by reference and recover URL/outcome or retry with the **same** reference.
 - [ ] Return `201` for a new ready attempt, `200` for replay/existing ready attempt, or `202` for unresolved initialisation with a visible reference and scheduled recovery.
 - [ ] On proven permanent provider rejection, mark the attempt failed, release reservations, and create notification intents; keep uncertain temporary outcomes pending.
 - [ ] Prevent a paid cart from starting a new attempt.

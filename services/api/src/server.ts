@@ -1,6 +1,7 @@
 import { createApp } from './app.js'
 import { loadConfig } from './config.js'
 import { createDatabase, verifyDatabase } from './db.js'
+import { ProviderClient } from './provider.js'
 
 const config = loadConfig()
 const db = createDatabase(config.dbPath)
@@ -9,6 +10,8 @@ const app = createApp({
   isReady: () => verifyDatabase(db),
   frontendOrigin: config.frontendOrigin,
   docsOrigin: config.docsOrigin,
+  provider: new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs),
+  config,
 })
 
 const server = app.listen(config.port, '0.0.0.0', () => {

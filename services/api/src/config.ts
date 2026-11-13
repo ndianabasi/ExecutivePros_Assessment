@@ -9,6 +9,7 @@ export interface ApiConfig {
   frontendOrigin: string
   docsOrigin: string
   providerBaseUrl: string
+  providerPublicOrigin: string
   queueBaseUrl: string
   providerWebhookSecret: string
   providerServiceSecret: string
@@ -87,6 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     frontendOrigin: origin(env, 'FRONTEND_ORIGIN'),
     docsOrigin: origin(env, 'DOCS_ORIGIN'),
     providerBaseUrl: serviceUrl(env, 'PROVIDER_BASE_URL'),
+    providerPublicOrigin: origin(env, 'PROVIDER_PUBLIC_ORIGIN'),
     queueBaseUrl: serviceUrl(env, 'QUEUE_BASE_URL'),
     providerWebhookSecret: secret(env, 'PROVIDER_WEBHOOK_SECRET'),
     providerServiceSecret: secret(env, 'PROVIDER_SERVICE_SECRET'),

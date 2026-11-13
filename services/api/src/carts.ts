@@ -62,7 +62,11 @@ async function addItem(tx: SqliteTransaction, cartId: number, item: { product_id
     { cart_id: cartId, product_id: item.product_id },
   ))[0]
   const quantity = Number(previous?.quantity ?? 0) + item.quantity
-  if (Number(product.stock_quantity) - Number(product.stock_reserved) < quantity) {
+  const reserved = (await tx.query<{ quantity: number }>(
+    "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM stock_reservations WHERE product_id = :id AND status = 'active'",
+    { id: item.product_id },
+  ))[0]
+  if (Number(product.stock_quantity) - Number(reserved?.quantity ?? 0) < quantity) {
     throw new HttpError(409, 'stock_unavailable', 'The requested product quantity is unavailable')
   }
   const lineTotal = Number(product.price_minor) * quantity
