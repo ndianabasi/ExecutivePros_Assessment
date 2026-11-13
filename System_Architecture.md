@@ -41,7 +41,9 @@ The Mock Payment Provider Service will be used to simulate a real payment provid
 
 ### 6. Mock Email Service
 
-The Mock Email Service will be used to delivery email to interested parties within the system. It will have its own port. The Frontend Service is expected to provide a simple, global interface element for accessing the Mock Email Service within its own interface.
+The Mock Email Service will be used to delivering email to interested parties within the system. Mailpit (https://github.com/axllent/mailpit) shall be used for provided the SMTP ports for sending emails and UI for reading emails. The Message Queue Service MUST deliver all emails to Mailpit via the Mock Email Service.
+
+The Frontend Service is expected to provide a simple, global interface element for accessing the Mock Email Service within its own interface.
 
 ## Reference-Level Explanations
 
@@ -151,19 +153,19 @@ The `cart_items` table establishes the many-to-many relationship between carts a
 
 **Additional table-level constraint:** `UNIQUE (cart_id, product_id)` prevents the same product from appearing in multiple rows within a single cart.
 
-## 6.`api.db / user_tokens`
+###### 6.`api.db / user_tokens`
 
 The `user_tokens` table stores opaque authentication tokens associated with users. Each user can have multiple tokens, allowing authentication across different sessions or devices.
 
-| Name           | Data Type | Constraints                                           | Description                                                                          |
-| -------------- | --------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `id`           | INTEGER   | PRIMARY KEY, AUTOINCREMENT                            | Unique identifier for each token record.                                             |
-| `user_id`      | INTEGER   | NOT NULL, FOREIGN KEY → `users(id)` ON DELETE CASCADE | Identifies the user who owns the token.                                              |
-| `token_hash`   | TEXT      | NOT NULL, UNIQUE                                      | Cryptographic hash of the opaque authentication token.                               |
-| `expires_at`   | TEXT      | NOT NULL                                              | Timestamp after which the token is no longer valid.                                  |
-| `revoked_at`   | TEXT      | NULL                                                  | Timestamp when the token was revoked. NULL indicates the token has not been revoked. |
-| `created_at`   | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                   | Timestamp when the token was generated.                                              |
-| `last_used_at` | TEXT      | NULL                                                  | Timestamp when the token was last used for authentication.                           |
+| Name           | Data Type | Constraints                                            | Description                                                                          |
+| -------------- | --------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `id`           | INTEGER   | PRIMARY KEY, AUTOINCREMENT                             | Unique identifier for each token record.                                             |
+| `user_id`      | INTEGER   | NOT NULL, FOREIGN KEY -> `users(id)` ON DELETE CASCADE | Identifies the user who owns the token.                                              |
+| `token_hash`   | TEXT      | NOT NULL, UNIQUE                                       | Cryptographic hash of the opaque authentication token.                               |
+| `expires_at`   | TEXT      | NOT NULL                                               | Timestamp after which the token is no longer valid.                                  |
+| `revoked_at`   | TEXT      | NULL                                                   | Timestamp when the token was revoked. NULL indicates the token has not been revoked. |
+| `created_at`   | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                    | Timestamp when the token was generated.                                              |
+| `last_used_at` | TEXT      | NULL                                                   | Timestamp when the token was last used for authentication.                           |
 
 ###### 7. Database relationships
 
@@ -205,7 +207,7 @@ The `payments` table stores information about payment transactions initialised t
 | `currency`            | TEXT      | NOT NULL, DEFAULT 'NGN'                                                                        | Currency associated with the payment transaction.                        |
 | `status`              | TEXT      | NOT NULL, DEFAULT 'pending', CHECK (`status IN ('pending', 'success', 'failed', 'cancelled')`) | Current status of the payment transaction.                               |
 | `payment_url`         | TEXT      | NOT NULL                                                                                       | URL where the user can simulate completing the payment.                  |
-| `failure_scenario_id` | INTEGER   | NULL, FOREIGN KEY → `failure_scenarios(id)`                                                    | References the failure scenario to be simulated for this payment.        |
+| `failure_scenario_id` | INTEGER   | NULL, FOREIGN KEY -> `failure_scenarios(id)`                                                   | References the failure scenario to be simulated for this payment.        |
 | `completed_at`        | TEXT      | NULL                                                                                           | Timestamp when the payment was completed successfully or unsuccessfully. |
 | `created_at`          | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                                                            | Timestamp when the payment was initialised.                              |
 | `updated_at`          | TEXT      | NOT NULL, DEFAULT CURRENT_TIMESTAMP                                                            | Timestamp when the payment record was last updated.                      |
@@ -219,7 +221,7 @@ Each event represents a particular payment outcome and can be delivered to the A
 | Name           | Data Type | Constraints                                                                                                  | Description                                                                                  |
 | -------------- | --------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | `id`           | INTEGER   | PRIMARY KEY, AUTOINCREMENT                                                                                   | Unique identifier for each webhook event.                                                    |
-| `payment_id`   | INTEGER   | NOT NULL, FOREIGN KEY → `payments(id)`                                                                       | Identifies the payment associated with the webhook event.                                    |
+| `payment_id`   | INTEGER   | NOT NULL, FOREIGN KEY -> `payments(id)`                                                                      | Identifies the payment associated with the webhook event.                                    |
 | `event_id`     | TEXT      | NOT NULL, UNIQUE                                                                                             | Unique identifier for the webhook event, used for event-level idempotency.                   |
 | `event_type`   | TEXT      | NOT NULL, CHECK (`event_type IN ('payment.success', 'payment.failed', 'payment.cancelled')`)                 | Type of payment event being communicated.                                                    |
 | `payload`      | TEXT      | NOT NULL                                                                                                     | JSON-encoded webhook payload containing the payment reference, amount, currency, and status. |
@@ -237,7 +239,7 @@ A webhook event can have multiple delivery records, allowing the Mock Payment Pr
 | Name               | Data Type | Constraints                                                                                  | Description                                                          |
 | ------------------ | --------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `id`               | INTEGER   | PRIMARY KEY, AUTOINCREMENT                                                                   | Unique identifier for each webhook delivery attempt.                 |
-| `webhook_event_id` | INTEGER   | NOT NULL, FOREIGN KEY → `webhook_events(id)`                                                 | Identifies the webhook event being delivered.                        |
+| `webhook_event_id` | INTEGER   | NOT NULL, FOREIGN KEY -> `webhook_events(id)`                                                | Identifies the webhook event being delivered.                        |
 | `attempt_number`   | INTEGER   | NOT NULL, CHECK (`attempt_number > 0`)                                                       | Sequential attempt number for webhook delivery.                      |
 | `status`           | TEXT      | NOT NULL, DEFAULT 'pending', CHECK (`status IN ('pending', 'success', 'failed', 'timeout')`) | Outcome of the webhook delivery attempt.                             |
 | `http_status_code` | INTEGER   | NULL                                                                                         | HTTP status code returned by the API Service.                        |
@@ -271,11 +273,11 @@ Each scenario has a unique code that the Frontend Service can send to the API Se
 
 Simplified entity relationship diagram for the Mock Payment Provider.
 
-| Relationship                          | Type        | Description                                                              |
-| ------------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| `failure_scenarios → payments`        | One-to-Many | A failure scenario can be associated with multiple payment transactions. |
-| `payments → webhook_events`           | One-to-Many | A payment can generate multiple webhook events.                          |
-| `webhook_events → webhook_deliveries` | One-to-Many | A webhook event can have multiple delivery attempts.                     |
+| Relationship                           | Type        | Description                                                              |
+| -------------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `failure_scenarios -> payments`        | One-to-Many | A failure scenario can be associated with multiple payment transactions. |
+| `payments -> webhook_events`           | One-to-Many | A payment can generate multiple webhook events.                          |
+| `webhook_events -> webhook_deliveries` | One-to-Many | A webhook event can have multiple delivery attempts.                     |
 
 ###### 6. Example failure scenario records\*\*
 
@@ -310,27 +312,49 @@ The following endpoints are required:
 
 Logs an existing user in without a password.
 
+Access Level: Public
+
 2. `GET /v1/products`
 
 Fetches all seeded products (with optional pagination). There will be no endpoint for creating products and no endpoint for fetching a single product.
+
+Access Level: Authenticated
 
 3. `POST /v1/cart`
 
 Creates a cart (if no active cart exists) and adds the accompanied products to the cart. A user will have only one active cart at a time. An active cart is one which is not checked out yet.
 
-3. `POST /v1/cart/checkout`
+Access Level: Authenticated
+
+4. `POST /v1/cart/checkout`
 
 Checks out an active cart and initialises the payment flow for the cart.
 
-4. `POST /v1/webhooks/payment`
+Access Level: Authenticated
+
+5. `POST /v1/webhooks/payment`
 
 A webhook event endpoint used by the Mock Payment Provider to notify the API Service of an incoming payment.
 
-5. `GET /v1/payments/:payment_id`
+Access Level: Authenticated
 
-Fetches the complete details of a payment including associated resources.
+6. `GET /v1/payments`
 
-Access Level: Admin
+Serves a paginated list of payments (including associated resources) system-wide or owned by the authenticated user.
+
+Access Level: Authenticated; Admin (system-wide) or paying user
+
+7. `GET /v1/payments/:payment_id`
+
+Serves the complete details of a payment including associated resources. Non-admin users can only access payments they own.
+
+Access Level: Authenticated; Admin (system-wide) or paying user
+
+8. `GET /v1/api_docs.json`
+
+Serves the Swagger API Documentation JSON file.
+
+Access Level: Public
 
 ** NOTE : ** There will be no endpoint for manually updating a payment status. Such an endpoint will be a security flaw. Payment statuses can only be updated during webhook handling or via a CRON job which marks payments which has been in pending state for more 30 days as failed payments.
 
@@ -507,7 +531,23 @@ For simplicity, the Message Queue Service shall expose only a single endpoint fo
 
 ### Frontend Service Design
 
+The Frontend Service will be a React application with the following routes:
+
+1. Home route (`/`) which redirects to `/login` route if visitor is not authenticated.
+2. Login route (`/login`) for login. A successful login redirects to `/products` route.
+3. Products route (`/products`) for paginated listing of all products. Its page component should provide interface elements for adding products to the cart and checking out a cart.
+4. Payments route (`/payments`) for paginated list of all payments returned by the backend.
+5. Single payment route (`/payments/:id`) for presenting the details of a single payment.
+
+The Frontend Service should provide buttons for accessing the Mock Email Service and the API Documentation Service.
+
 ### API Documentation Service Design
+
+The API Documentation Service is a standalone service which will host the Swagger UI (https://github.com/swagger-api/swagger-ui) for rendering the API documentation for endpoints exposed by the backend.
+
+The API Service should expose a public endpoint for serving the swagger JSON file.
+
+The API service CORS config should allow the origin for the API Documentation Service.
 
 ### Mock Payment Provider Design
 
@@ -519,8 +559,6 @@ The Mock Payment Provider Service shall be used primarily to simulate a payment 
 For simplicity, the Message Queue Service shall expose only a single endpoint for completing a payment: `POST /payments`. There will be no payment confirmation endpoint to be called by the API service. Verification of the webhook event shall authenticate the webhook request and serve as payment verification if all conditions are met.
 
 The Mock Payment Provider shall accompany all its request to the API service with a signature of the signed request body. A shared token between the API service and Mock Payment Provider service shall be used to generate and verify the signature.
-
-### Miscellaneous Designs
 
 #### Logging Implementation
 
@@ -537,7 +575,7 @@ The Mock Payment Provider shall accompany all its request to the API service wit
 
 ### Deployment
 
-### API Documentation
+All microservices described in this document shall be deployed as containerised services via a Docker Compose file and Dockerfiles. There shall be one container per service.
 
 ### Alternatives
 
