@@ -1,0 +1,27 @@
+# JavaScript dependencies and Yarn-generated archives
+node_modules/
+.yarn/cache/
+.yarn/install-state.gz
+.pnp.*
+
+# Local runtime configuration and generated secrets
+.env
+.env.*
+!.env.example
+.local/
+
+# SQLite databases, WAL sidecars, and disposable test data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+test-results/
+playwright-report/
+coverage/
+
+# Build output and operating-system/editor files
+dist/
+build/
+.DS_Store
