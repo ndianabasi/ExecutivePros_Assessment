@@ -99,7 +99,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Reuse an existing pending payment for a compatible new key; prevent a second pending payment and reservation set for the cart.
 - [ ] For a new attempt, create one unique reference, immutable amount/item snapshots, reservations, pending payment, and idempotency mapping in one transaction.
 - [ ] Mark an active cart checked out at first attempt; keep a failed/cancelled cart available for a new attempt with a **new** key/reference.
-- [ ] Call idempotent provider `POST /payments` outside the transaction with reference, amount, currency, and selected scenario.
+- [ ] Call idempotent provider `POST /payments/initialise` outside the transaction with reference, amount, currency, immutable `checkout_expires_at`, and selected scenario.
 - [ ] Apply provider timeout, bounded transient retries, exponential backoff, and permanent-error classification.
 - [ ] Persist a returned provider URL; reject any client-supplied URL or arbitrary-host redirect.
 - [ ] After a lost provider response, query by reference and recover URL/outcome or retry with the **same** reference.
@@ -204,8 +204,8 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 14. Required cross-service contracts (API integration blockers)
 
-- [ ] Confirm provider `POST /payments` is idempotent by reference and details, with conflict rejection for changed details.
-- [ ] Confirm authenticated provider `GET /payments/:reference` returns reference, amount, currency, status, and URL when available.
+- [ ] Confirm provider `POST /payments/initialise` is idempotent by reference/details including `checkout_expires_at`, and rejects conflicting details.
+- [ ] Confirm authenticated provider `GET /payments/:reference` returns reference, amount, currency, status, and URL when available, or `404` while delayed initialization has not committed.
 - [ ] Confirm the provider exposes an active failure-scenario catalogue and signs raw webhook bodies with stable `event_id` values; delivery retries `503`/network failures and stops on `2xx` or permanent `4xx`.
 - [ ] Confirm authenticated queue `POST /jobs` durably accepts each call, treats `notification_key` as correlation metadata, may create a second job/email after an uncertain retry, and distinguishes acceptance from temporary failure.
 - [ ] Confirm the frontend sends Bearer tokens and checkout idempotency keys, keeps a key for HTTP retries, uses a new key for a new attempt, opens an Authorization-capable SSE stream, and refetches payment state after reconnect.

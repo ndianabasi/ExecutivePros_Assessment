@@ -126,4 +126,4 @@ These are dependencies of the Frontend Service, not instructions to implement th
 
 An absent provider framing/message contract or stale API-data response blocks the corresponding frontend gate. The frontend never reads another service's database, changes payment status directly, or assumes email delivery is exactly once.
 
-Before integration acceptance, align the API Service document and tests with the agreed frontend contract: local-storage token persistence replaces its in-memory preference; `GET /v1/payments/:id` must expose a ready `payment_url` for recovery from `202`; and API data responses must remain uncached. These are cross-service contract corrections, not frontend implementation work.
+Before integration acceptance, verify the API Service and tests match the agreed frontend contract: local-storage token persistence, `GET /v1/payments/:id` exposing a ready `payment_url` for recovery from `202`, and uncached API data responses. These are cross-service dependencies, not frontend implementation work.
