@@ -59,6 +59,8 @@ The code is to be organised as a monorepo consisting of distinct projects. Each 
 
 `Yarn` should be used to manage the monorepo.
 
+`Git` must be used for source control. All commits must be conventional commits.
+
 Each microservice must be a sub
 
 ### Database and Data Models
