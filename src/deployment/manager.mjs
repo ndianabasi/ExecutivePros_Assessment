@@ -6,6 +6,7 @@ import { existsSync, readFileSync, statfsSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { localSecretsDirectory, resolveRepositoryPath, secretPath } from './platform.mjs'
+import { ensureDefaultEnvironmentFile, setSecretFilePaths } from './env-file.mjs'
 import { initializeLocalSecrets, makeOwnerOnly } from './secret-files.mjs'
 import {
   assertPinnedAlpineDockerfiles,
@@ -89,9 +90,13 @@ function parseJsonLines(contents) {
 function readEnvFile(value = '.env') {
   let path
   try { path = resolveRepositoryPath(repoRoot, value) } catch {
-    throw new Error('Compose env file must exist inside this repository; start with `cp .env.example .env`.')
+    throw new Error('Compose env file must exist inside this repository.')
   }
-  if (!existsSync(path)) throw new Error('Compose env file must exist inside this repository; start with `cp .env.example .env`.')
+  if (!existsSync(path)) {
+    throw new Error(
+      'Compose env file must exist inside this repository; `yarn deploy:local` creates the default .env automatically.',
+    )
+  }
   return path
 }
 
@@ -214,6 +219,9 @@ export async function preflight({ project = defaultProject, envFile: requestedEn
   })
   await step('Validate pinned service images', () => validateDockerfiles())
   await step('Ensure local service secrets', () => ensureSecrets(project))
+  await step('Set generated secret file paths in environment', () =>
+    setSecretFilePaths({ repositoryRoot: repoRoot, envFile }),
+  )
   const config = await step('Render Compose configuration', () => renderedConfig(project, envFile))
   await step('Validate port-derived browser origins', () => validateOrigins(config))
   if (checkPorts) await checkHostPorts(project, config, step)
@@ -388,6 +396,9 @@ export async function verifyDeploymentOrigins(config, step = directStep) {
 
 export async function deployLocal({ project = defaultProject, envFile: requestedEnvFile = '.env', outputDirectory = '.local/backups' } = {}) {
   const step = (label, action) => runLoggedStep(label, action)
+  await step('Prepare deployment environment file and create default .env if needed', () =>
+    ensureDefaultEnvironmentFile({ repositoryRoot: repoRoot, envFile: requestedEnvFile }),
+  )
   const { envFile, config } = await preflight({ project, envFile: requestedEnvFile, step })
   await step('Build all six service images', () => compose(project, ['build'], { envFile }))
   await createVolumes(project, step)

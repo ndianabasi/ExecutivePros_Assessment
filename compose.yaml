@@ -290,8 +290,8 @@ volumes:
 
 secrets:
   queue_service_secret:
-    file: ./.local/secrets/queue_service_secret
+    file: ${QUEUE_SERVICE_SECRET_FILE:?QUEUE_SERVICE_SECRET_FILE must be set}
   provider_service_secret:
-    file: ./.local/secrets/provider_service_secret
+    file: ${PROVIDER_SERVICE_SECRET_FILE:?PROVIDER_SERVICE_SECRET_FILE must be set}
   provider_webhook_secret:
-    file: ./.local/secrets/provider_webhook_secret
+    file: ${PROVIDER_WEBHOOK_SECRET_FILE:?PROVIDER_WEBHOOK_SECRET_FILE must be set}

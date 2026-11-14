@@ -46,7 +46,9 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 ## 3. Configuration, secrets, and browser contracts
 
 - [x] Document non-secret port/origin defaults and required variable names in `.env.example`.
+- [x] Create the default `.env` from `.env.example` idempotently during `yarn deploy:local`, preserve existing user settings, and stop requiring a manual copy step.
 - [x] On initial local setup, generate three independent cryptographically random 32-byte-or-stronger service/HMAC secrets once under ignored `.local/secrets/` files.
+- [x] After secret generation, write cross-platform repository-relative secret source paths into `.env` and use the updated file for Compose operations.
 - [x] Make secret files owner-readable with POSIX `0700`/`0600` or Windows owner-only ACLs, mount each only into its API/provider/queue consumers, and expose its path via a corresponding `*_FILE` setting.
 - [x] Resolve secret-file locations on Windows, Linux, and macOS using host-native path handling and stable Compose-relative sources; keep container paths at `/run/secrets/...`.
 - [x] Reject missing/weak secrets or conflicting direct/file secret settings before service listeners start.
@@ -140,6 +142,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 ## Recorded progress — 2026-11-14
 
+- `yarn deploy:local` now creates the missing default `.env` from `.env.example`, preserves existing settings, generates/validates secret files, and writes their repository-relative Compose source paths before rendering deployment config. `yarn test:deployment` passes 25/25, Docker Compose `config` accepts the relative secret sources, and Node syntax/`git diff --check` pass. A full deployment was not rerun for this environment-file change.
 - Root deployment policy/CLI/secret path/migration-order tests: `yarn test:deployment` (17 passed); root Yarn immutable install and Node syntax checks passed. POSIX generation/idempotency/concurrency/missing-key behavior and Windows/Linux/macOS path/ACL policies were exercised in temp directories or platform simulation. The migration test injects a failing provider migration and proves later initialization and regular Compose startup are not invoked.
 - 2026-11-14: `deploy:local` now emits `starting:`, `success:`, or `failed:` for preflight checks, each host port check, image build, persistent-volume setup, migrations, startup, health polling, and each browser-origin check; failures stop later operations. Final output includes the loopback Frontend Service URL only after verification. Unit coverage checks success/failure formatting and migration-step order; `yarn test:deployment` passes 20/20.
 - Compose preflight and full deploy ran on isolated projects `e2e-deployment`, `e2e-restore`, and `e2e-restore-2`, with distinct 182xx/183xx/184xx host port sets. The unrelated project holding default Mailpit port 18025 was not changed.
