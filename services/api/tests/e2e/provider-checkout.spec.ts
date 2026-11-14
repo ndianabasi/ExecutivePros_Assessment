@@ -13,7 +13,7 @@ async function waitFor(predicate: () => Promise<boolean>) {
 }
 
 test('real provider checkout fulfils once and its durable API email intent reaches queue and Mailpit', async ({ assert, client }) => {
-  const { db, config, dispatchOutbox } = await useApiFixture()
+  const { db, config, dispatchOutbox } = useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   assert.equal(login.status(), 200)
   const token = login.body().data.token as string
@@ -94,7 +94,7 @@ test('real provider checkout fulfils once and its durable API email intent reach
 })
 
 test('real provider status reconciliation recovers a deliberately skipped webhook', async ({ assert, client }) => {
-  const { db, config } = await useApiFixture()
+  const { db, config } = useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   const auth = `Bearer ${login.body().data.token as string}`
   const cart = await client.post('/v1/cart').header('Authorization', auth).json({ items: [{ product_id: 1, quantity: 1 }] })
@@ -132,7 +132,7 @@ test('real provider status reconciliation recovers a deliberately skipped webhoo
 })
 
 test('WEBHOOK_013 incident remains visible after provider status reconciliation', async ({ assert, client }) => {
-  const { db, config } = await useApiFixture()
+  const { db, config } = useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   const auth = `Bearer ${login.body().data.token as string}`
   const cart = await client.post('/v1/cart').header('Authorization', auth).json({ items: [{ product_id: 1, quantity: 1 }] })
@@ -166,7 +166,7 @@ test('WEBHOOK_013 incident remains visible after provider status reconciliation'
 })
 
 test('WEBHOOK_016 persists the malformed webhook incident in payment details', async ({ assert, client }) => {
-  const { db, config } = await useApiFixture()
+  const { db, config } = useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   const auth = `Bearer ${login.body().data.token as string}`
   const cart = await client.post('/v1/cart').header('Authorization', auth).json({ items: [{ product_id: 1, quantity: 1 }] })
