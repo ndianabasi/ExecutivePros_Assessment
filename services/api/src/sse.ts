@@ -3,11 +3,11 @@ import type { Knex } from 'knex'
 import { authenticatedUser, requireAuth } from './auth-middleware.js'
 import { currentRequestId, logger } from './logging.js'
 import type { ApiConfig } from './config.js'
-import { PaymentEventHub, type PaymentStatusEvent } from './payment-events.js'
+import { PaymentEventHub, type PaymentActivityEvent } from './payment-events.js'
 
-function writeEvent(response: Response, event: PaymentStatusEvent) {
+function writeEvent(response: Response, event: PaymentActivityEvent) {
   if (response.destroyed || response.writableEnded) return
-  response.write(`id: ${event.request_id}\nevent: payment\ndata: ${JSON.stringify(event)}\n\n`)
+  response.write(`id: ${event.id}\nevent: payment-activity\ndata: ${JSON.stringify(event)}\n\n`)
 }
 
 export function registerPaymentEventRoutes(app: Express, db: Knex, hub: PaymentEventHub, config: ApiConfig) {

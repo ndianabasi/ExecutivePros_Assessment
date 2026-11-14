@@ -5,6 +5,7 @@ import { currentRequestId, logger } from './logging.js'
 import { applyPaymentEvidence, recordInvalidWebhook, type TerminalPaymentStatus } from './payment-transitions.js'
 import { validate, webhookReferenceValidator, webhookSignatureValidator, webhookValidator } from './validation.js'
 import type { PaymentEventHub } from './payment-events.js'
+import type { PaymentActivityTarget } from './payment-events.js'
 
 function error(response: Response, status: number, code: string, message: string) {
   return response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
@@ -13,6 +14,18 @@ function error(response: Response, status: number, code: string, message: string
 function busy(errorValue: unknown) {
   return typeof errorValue === 'object' && errorValue !== null && 'code' in errorValue &&
     typeof errorValue.code === 'string' && (errorValue.code.includes('SQLITE_BUSY') || errorValue.code.includes('SQLITE_LOCKED'))
+}
+
+async function findPaymentTarget(db: Knex, reference: string): Promise<PaymentActivityTarget | undefined> {
+  const payment = (await db.raw('SELECT id, user_id, reference FROM payments WHERE reference = :reference', { reference }) as Array<Record<string, unknown>>)[0]
+  return payment ? { payment_id: Number(payment.id), user_id: Number(payment.user_id), reference: String(payment.reference) } : undefined
+}
+
+function publishWebhookActivity(hub: PaymentEventHub | undefined, target: PaymentActivityTarget, type: 'webhook_received' | 'webhook_verification_succeeded' | 'webhook_verification_failed' | 'webhook_result', title: string, message: string) {
+  hub?.publish(target.user_id, {
+    type, payment_id: target.payment_id, reference: target.reference, title, message, source: 'webhook',
+    request_id: currentRequestId() ?? 'unknown',
+  })
 }
 
 export function registerWebhookRoutes(app: Express, db: Knex, secret: string, eventHub?: PaymentEventHub) {
@@ -35,9 +48,14 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
           unverifiedReference = (await validate<{ reference: string }>(webhookReferenceValidator, { reference: candidate.reference })).reference
         }
       } catch { /* Invalid signatures are recorded even when their body cannot be correlated. */ }
-      try { await recordInvalidWebhook(db, bodyHash, unverifiedReference) }
+      let target: PaymentActivityTarget | undefined
+      try { target = await recordInvalidWebhook(db, bodyHash, unverifiedReference) }
       catch (incidentError) {
         logger.error({ request_id: currentRequestId(), failure: busy(incidentError) ? 'database_busy' : 'incident_write_failed' }, 'invalid webhook incident could not be recorded')
+      }
+      if (target) {
+        publishWebhookActivity(eventHub, target, 'webhook_received', 'Provider Webhook Received', 'A provider update was received for this payment.')
+        publishWebhookActivity(eventHub, target, 'webhook_verification_failed', 'Webhook Verification Failed', 'The provider webhook signature could not be verified. No payment data was applied.')
       }
       logger.warn({ request_id: currentRequestId(), body_hash: bodyHash }, 'provider webhook signature rejected')
       return error(response, 401, 'invalid_signature', 'Provider webhook signature is invalid')
@@ -45,6 +63,17 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
     let decoded: unknown
     try { decoded = JSON.parse(rawBody.toString('utf8')) }
     catch { return error(response, 400, 'invalid_json', 'Webhook body must contain valid JSON') }
+    let target: PaymentActivityTarget | undefined
+    if (typeof decoded === 'object' && decoded !== null && 'reference' in decoded) {
+      try {
+        const candidate = await validate<{ reference: string }>(webhookReferenceValidator, { reference: decoded.reference })
+        target = await findPaymentTarget(db, candidate.reference)
+      } catch { /* A signed but malformed event can still be rejected without a payment notification. */ }
+    }
+    if (target) {
+      publishWebhookActivity(eventHub, target, 'webhook_received', 'Provider Webhook Received', 'A provider update was received for this payment.')
+      publishWebhookActivity(eventHub, target, 'webhook_verification_succeeded', 'Webhook Verified', 'The provider webhook signature was verified.')
+    }
     let body: {
       event_id: string; event_type: string; status: TerminalPaymentStatus; reference: string;
       provider_reference?: string; amount: number; currency: string; occurred_at?: string;
@@ -53,6 +82,7 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
       body = await validate(webhookValidator, decoded, 'invalid_webhook', 'Webhook body does not match the payment event contract')
     } catch (validationError) {
       if (validationError instanceof Error && 'status' in validationError && validationError.status === 400) {
+        if (target) publishWebhookActivity(eventHub, target, 'webhook_result', 'Webhook Rejected', 'The signed provider webhook did not match the payment event contract.')
         return error(response, 400, 'invalid_webhook', 'Webhook body does not match the payment event contract')
       }
       throw validationError
@@ -66,6 +96,18 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
       }, eventHub)
       logger.info({ request_id: currentRequestId(), payment_reference: body.reference, provider_event_id: body.event_id,
         webhook_outcome: outcome }, 'provider webhook processed')
+      if (target) {
+        const result: [string, string] = outcome === 'mismatch'
+          ? ['Webhook Evidence Mismatch', 'The signed provider amount or currency did not match this payment.']
+          : outcome === 'terminal_conflict' || outcome === 'late_success'
+            ? ['Webhook Conflict Recorded', 'The provider update conflicts with the terminal payment state and was not applied.']
+            : outcome === 'duplicate'
+              ? ['Duplicate Webhook Ignored', 'This provider webhook was already processed.']
+              : outcome === 'processed'
+                ? ['Webhook Processed', 'The verified provider update was processed.']
+                : ['Webhook Not Applied', 'The signed provider update did not match a local payment.']
+        publishWebhookActivity(eventHub, target, 'webhook_result', result[0], result[1])
+      }
       if (outcome === 'mismatch' || outcome === 'not_found') return error(response, 422, 'payment_evidence_mismatch', 'Signed provider evidence does not match a local payment')
       if (outcome === 'conflict') return error(response, 409, 'event_id_conflict', 'Provider event ID was already used with different content')
       response.status(200).json({ data: { accepted: true, outcome } })

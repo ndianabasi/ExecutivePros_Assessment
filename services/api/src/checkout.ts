@@ -8,6 +8,7 @@ import { ProviderClient, ProviderError, type ProviderPayment } from './provider.
 import { immediate } from './sqlite.js'
 import { logger } from './logging.js'
 import { checkoutValidator, idempotencyHeaderValidator, validate } from './validation.js'
+import type { PaymentEventHub } from './payment-events.js'
 
 type Row = Record<string, unknown>
 type CheckoutResult = { paymentId: number; reference: string; created: boolean; alreadyMapped: boolean }
@@ -154,13 +155,18 @@ async function resolveCheckout(db: Knex, args: {
   })
 }
 
-async function initialisePayment(db: Knex, provider: ProviderClient, config: ApiConfig, paymentId: number, reference: string, providerOrigin: string) {
+async function initialisePayment(db: Knex, provider: ProviderClient, config: ApiConfig, paymentId: number, reference: string, providerOrigin: string, eventHub?: PaymentEventHub) {
   const payment = await db('payments').where({ id: paymentId }).first()
   if (!payment || payment.status !== 'pending' || payment.initialisation_state === 'ready') return
   let result: ProviderPayment | undefined
   let permanentFailure: ProviderError | undefined
   for (let attempt = 1; attempt <= config.providerInitAttempts; attempt += 1) {
     await db.raw('UPDATE payments SET initialisation_attempts = :attempt, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND status = :status', { attempt, id: paymentId, status: 'pending' })
+    eventHub?.publish(Number(payment.user_id), {
+      type: 'provider_initialization_started', payment_id: paymentId, reference,
+      title: 'Provider Checkout Initialization Started', message: `Provider initialization attempt ${attempt} started.`,
+      source: 'provider_initialization', attempt_number: attempt, status: 'pending',
+    })
     try {
       result = await provider.initialise({
         reference,
@@ -193,23 +199,39 @@ async function initialisePayment(db: Knex, provider: ProviderClient, config: Api
       permanentFailure = new ProviderError('Provider returned a payment URL outside the configured origin', false)
       logger.error({ payment_reference: reference, outcome: 'invalid_provider_url' }, 'provider initialization response rejected')
     } else if (url) {
-      await db.raw("UPDATE payments SET payment_url = :url, initialisation_state = 'ready', next_initialisation_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND status = 'pending'", { url: url.toString(), id: paymentId })
+      const rows = await db.raw<{ id: number }[]>("UPDATE payments SET payment_url = :url, initialisation_state = 'ready', next_initialisation_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND status = 'pending' RETURNING id", { url: url.toString(), id: paymentId })
+      if (rows.length) eventHub?.publish(Number(payment.user_id), {
+        type: 'provider_initialization_succeeded', payment_id: paymentId, reference,
+        title: 'Provider Checkout Ready', message: 'The payment provider is ready to accept this payment.',
+        source: 'provider_initialization', status: 'pending',
+      })
       return
     }
   }
 
   if (permanentFailure) {
-    await immediate(db, async (tx) => {
-      await tx.query("UPDATE payments SET status = 'failed', initialisation_state = 'failed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND status = 'pending'", { id: paymentId })
+    const transitioned = await immediate(db, async (tx) => {
+      const changed = await tx.query<{ id: number }>("UPDATE payments SET status = 'failed', initialisation_state = 'failed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND status = 'pending' RETURNING id", { id: paymentId })
+      if (changed.length === 0) return false
       await tx.query("UPDATE stock_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP WHERE payment_id = :id AND status = 'active'", { id: paymentId })
+      return true
+    })
+    if (transitioned) eventHub?.publish(Number(payment.user_id), {
+      type: 'payment_failed', payment_id: paymentId, reference, status: 'failed', source: 'provider_initialization',
+      title: 'Payment Failed', message: 'The provider permanently rejected payment initialization. Reserved stock was released.',
     })
     logger.error({ payment_reference: reference, provider_status: permanentFailure.status ?? null, outcome: 'permanent_initialization_failure' }, 'provider initialization permanently rejected')
   } else {
     await db.raw("UPDATE payments SET next_initialisation_at = :next, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND status = 'pending'", { next: new Date(Date.now() + 60000).toISOString(), id: paymentId })
+    eventHub?.publish(Number(payment.user_id), {
+      type: 'provider_initialization_retry_scheduled', payment_id: paymentId, reference, status: 'pending',
+      source: 'provider_initialization', title: 'Provider Initialization Retry Scheduled',
+      message: 'The provider has not confirmed checkout initialization. The API will retry with the same payment reference.',
+    })
   }
 }
 
-export function registerCheckoutRoutes(app: Express, db: Knex, provider: ProviderClient, config: ApiConfig) {
+export function registerCheckoutRoutes(app: Express, db: Knex, provider: ProviderClient, config: ApiConfig, eventHub?: PaymentEventHub) {
   async function scenarios() {
     try { return await provider.scenarios() }
     catch { throw new HttpError(503, 'provider_unavailable', 'Failure scenarios are temporarily unavailable') }
@@ -229,7 +251,11 @@ export function registerCheckoutRoutes(app: Express, db: Knex, provider: Provide
     if (scenario !== undefined && !available.some((item) => item.code === scenario)) throw new HttpError(422, 'unknown_failure_scenario', 'The selected failure scenario is unavailable')
     const checkout = await resolveCheckout(db, { userId: user.userId, key, ...(cartId === undefined ? {} : { requestedCartId: cartId }), scenario: scenario ?? null })
     logger.info({ payment_reference: checkout.reference, checkout_outcome: checkout.created ? 'created' : checkout.alreadyMapped ? 'idempotency_replay' : 'pending_attempt_reused' }, 'checkout request resolved')
-    await initialisePayment(db, provider, config, checkout.paymentId, checkout.reference, config.providerPublicOrigin)
+    if (checkout.created) eventHub?.publish(user.userId, {
+      type: 'payment_pending', payment_id: checkout.paymentId, reference: checkout.reference, status: 'pending', source: 'api',
+      title: 'Payment Started', message: 'Checkout was accepted. The API is initializing the provider payment.',
+    })
+    await initialisePayment(db, provider, config, checkout.paymentId, checkout.reference, config.providerPublicOrigin, eventHub)
     const payment = await db('payments').where({ id: checkout.paymentId }).first()
     if (!payment) throw new Error('Checkout payment disappeared')
     const body = { data: responseShape(payment) }

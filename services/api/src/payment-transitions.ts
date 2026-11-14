@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { Knex } from 'knex'
 import { immediate, type SqliteTransaction } from './sqlite.js'
 import { currentRequestId, logger } from './logging.js'
-import type { PaymentEventHub, PaymentStatusEvent } from './payment-events.js'
+import type { PaymentActivityDraft, PaymentActivityTarget, PaymentEventHub } from './payment-events.js'
 
 export type TerminalPaymentStatus = 'success' | 'failed' | 'cancelled'
 export interface PaymentEvidence {
@@ -82,7 +82,7 @@ async function insertEvidence(tx: SqliteTransaction, evidence: PaymentEvidence, 
 }
 
 export async function applyPaymentEvidence(db: Knex, evidence: PaymentEvidence, eventHub?: PaymentEventHub): Promise<TransitionResult> {
-  let committedEvent: PaymentStatusEvent | undefined
+  let committedEvent: PaymentActivityDraft | undefined
   let committedUserId: number | undefined
   const outcome = await immediate(db, async (tx) => {
     if (evidence.eventId) {
@@ -169,8 +169,15 @@ export async function applyPaymentEvidence(db: Knex, evidence: PaymentEvidence, 
       await tx.query("UPDATE stock_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP WHERE payment_id = :id AND status = 'active'", { id: payment.id })
     }
     await createUserNotification(tx, payment, evidence.status)
-    committedEvent = { payment_id: Number(payment.id), reference: payment.reference, status: evidence.status,
-      request_id: currentRequestId() ?? 'unknown', event_id: evidence.eventId ?? null }
+    committedEvent = {
+      type: evidence.status === 'success' ? 'payment_succeeded' : evidence.status === 'failed' ? 'payment_failed' : 'payment_cancelled',
+      payment_id: Number(payment.id), reference: payment.reference, status: evidence.status, source: evidence.source,
+      title: evidence.status === 'success' ? 'Payment Successful' : evidence.status === 'failed' ? 'Payment Failed' : 'Payment Cancelled',
+      message: evidence.source === 'webhook'
+        ? `A verified provider webhook confirmed payment ${evidence.status}.`
+        : `Provider status reconciliation confirmed payment ${evidence.status}.`,
+      request_id: currentRequestId() ?? 'unknown',
+    }
     committedUserId = Number(payment.user_id)
     logger.info({ payment_reference: payment.reference, payment_status: evidence.status, evidence_source: evidence.source, provider_event_id: evidence.eventId ?? null }, 'payment transition committed')
     return 'processed'
@@ -187,7 +194,7 @@ export async function expirePendingPayment(db: Knex, input: {
   currency: string
   evidenceHash: string
 }, eventHub?: PaymentEventHub): Promise<boolean> {
-  let committedEvent: PaymentStatusEvent | undefined
+  let committedEvent: PaymentActivityDraft | undefined
   let committedUserId: number | undefined
   const expired = await immediate(db, async (tx) => {
     const payment = (await tx.query<{
@@ -217,8 +224,12 @@ export async function expirePendingPayment(db: Knex, input: {
       code: 'payment_expired_provider_pending',
       details: 'Payment reached its checkout expiry while the provider still reported pending; provider cancellation was not confirmed',
     })
-    committedEvent = { payment_id: Number(payment.id), reference: payment.reference, status: 'failed',
-      request_id: currentRequestId() ?? 'reconciliation', event_id: null }
+    committedEvent = {
+      type: 'payment_failed', payment_id: Number(payment.id), reference: payment.reference,
+      status: 'failed', source: 'reconciliation', title: 'Payment Failed',
+      message: 'The provider still reported pending at checkout expiry. The API marked the payment failed and released reserved stock; provider cancellation was not confirmed.',
+      request_id: currentRequestId() ?? 'reconciliation',
+    }
     committedUserId = Number(payment.user_id)
     logger.warn({ payment_reference: payment.reference, payment_status: 'failed', evidence_source: 'reconciliation' },
       'pending provider payment expired without provider cancellation confirmation')
@@ -228,10 +239,10 @@ export async function expirePendingPayment(db: Knex, input: {
   return expired
 }
 
-export async function recordInvalidWebhook(db: Knex, bodyHash: string, unverifiedReference?: string) {
-  await immediate(db, async (tx) => {
+export async function recordInvalidWebhook(db: Knex, bodyHash: string, unverifiedReference?: string): Promise<PaymentActivityTarget | undefined> {
+  return immediate(db, async (tx) => {
     const payment = unverifiedReference
-      ? (await tx.query<{ id: number; reference: string }>('SELECT id, reference FROM payments WHERE reference = :reference', { reference: unverifiedReference }))[0]
+      ? (await tx.query<{ id: number; user_id: number; reference: string }>('SELECT id, user_id, reference FROM payments WHERE reference = :reference', { reference: unverifiedReference }))[0]
       : undefined
     await createIncident(tx, {
       dedupeKey: `invalid_signature:${bodyHash}`,
@@ -239,5 +250,6 @@ export async function recordInvalidWebhook(db: Knex, bodyHash: string, unverifie
       code: 'invalid_webhook_signature',
       details: 'A provider webhook failed HMAC authentication; its unverified contents were not applied',
     })
+    return payment ? { user_id: Number(payment.user_id), payment_id: Number(payment.id), reference: payment.reference } : undefined
   })
 }

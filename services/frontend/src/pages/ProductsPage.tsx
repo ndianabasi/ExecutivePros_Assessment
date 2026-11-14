@@ -245,7 +245,8 @@ export function ProductsPage() {
   }, [api, intent?.payment_id, refresh])
 
   useEffect(() => {
-    if (!event || !intent?.payment_id || event.payment_id !== intent.payment_id) return
+    if (!event || !intent?.payment_id || event.payment_id !== intent.payment_id ||
+        !['payment_succeeded', 'payment_failed', 'payment_cancelled'].includes(event.type)) return
     void refreshPayment(event.payment_id)
   }, [event, intent?.payment_id, refreshPayment])
 

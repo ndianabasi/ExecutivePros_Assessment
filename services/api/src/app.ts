@@ -118,7 +118,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
   registerCartRoutes(app, db)
   registerPaymentReadRoutes(app, db)
   registerDiagnosticRoutes(app, db)
-  if (provider && config) registerCheckoutRoutes(app, db, provider, config)
+  if (provider && config) registerCheckoutRoutes(app, db, provider, config, eventHub)
   if (config) {
     registerPaymentEventRoutes(app, db, eventHub, config)
     registerWebhookRoutes(app, db, config.providerWebhookSecret, eventHub)

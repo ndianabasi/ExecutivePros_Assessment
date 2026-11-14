@@ -1,26 +1,76 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { PaymentEvent } from './model'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { PaymentActivityNotification, PaymentActivityType, PaymentEvent } from './model'
 import { useSession } from './session'
 
 type Connection = 'connecting' | 'connected' | 'disconnected' | 'stopped'
 interface EventContextValue {
   connection: Connection
   event: PaymentEvent | null
+  notifications: PaymentActivityNotification[]
+  dismissNotification(id: string): void
   disconnect(): void
   reconnect(): void
 }
 const EventContext = createContext<EventContextValue | null>(null)
+const activityTypes = new Set<PaymentActivityType>([
+  'payment_pending', 'provider_initialization_started', 'provider_initialization_succeeded', 'provider_initialization_retry_scheduled',
+  'webhook_received', 'webhook_verification_succeeded', 'webhook_verification_failed', 'webhook_result',
+  'reconciliation_started', 'reconciliation_completed', 'payment_succeeded', 'payment_failed', 'payment_cancelled',
+])
+
+export function notificationStorageKey(userId: number) {
+  return `executivepros.frontend.payment-notifications.v1:${userId}`
+}
+
+function isPaymentActivity(value: unknown): value is PaymentActivityNotification {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Record<string, unknown>
+  return typeof item.id === 'string' && activityTypes.has(item.type as PaymentActivityType) &&
+    Number.isSafeInteger(item.payment_id) && typeof item.reference === 'string' &&
+    typeof item.occurred_at === 'string' && Number.isFinite(Date.parse(item.occurred_at)) &&
+    typeof item.title === 'string' && typeof item.message === 'string'
+}
+
+function readNotifications(userId: number): PaymentActivityNotification[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(notificationStorageKey(userId)) ?? '[]')
+    return Array.isArray(value) ? value.filter(isPaymentActivity).sort((left, right) => right.occurred_at.localeCompare(left.occurred_at)) : []
+  } catch { return [] }
+}
+
+function storeNotifications(userId: number, notifications: PaymentActivityNotification[]) {
+  try { localStorage.setItem(notificationStorageKey(userId), JSON.stringify(notifications)) } catch { /* Keep the in-memory notification if browser storage is unavailable. */ }
+}
 
 export function PaymentEventProvider({ children }: { children: ReactNode }) {
   const { config, identity, invalidate } = useSession()
   const [connection, setConnection] = useState<Connection>('stopped')
   const [event, setEvent] = useState<PaymentEvent | null>(null)
+  const [notificationState, setNotificationState] = useState(() => ({
+    userId: identity?.user.id ?? null,
+    items: identity ? readNotifications(identity.user.id) : [],
+  }))
   const [paused, setPaused] = useState(false)
 
   useEffect(() => {
     setEvent(null)
     if (identity) setPaused(false)
   }, [identity?.token])
+
+  useEffect(() => {
+    const userId = identity?.user.id ?? null
+    setNotificationState({ userId, items: userId === null ? [] : readNotifications(userId) })
+  }, [identity?.user.id])
+
+  const dismissNotification = useCallback((id: string) => {
+    const userId = identity?.user.id
+    if (userId === undefined) return
+    setNotificationState((current) => {
+      const items = (current.userId === userId ? current.items : readNotifications(userId)).filter((item) => item.id !== id)
+      storeNotifications(userId, items)
+      return { userId, items }
+    })
+  }, [identity?.user.id])
 
   useEffect(() => {
     if (!identity || paused) {
@@ -55,10 +105,20 @@ export function PaymentEventProvider({ children }: { children: ReactNode }) {
             buffer = lines.pop() ?? ''
             for (const line of lines) {
               if (line.startsWith('event:')) eventName = line.slice(6).trim()
-              if (line.startsWith('data:') && eventName === 'payment') {
+              if (line.startsWith('data:') && eventName === 'payment-activity') {
                 try {
                   const next = JSON.parse(line.slice(5).trim()) as PaymentEvent
-                  if (Number.isSafeInteger(next.payment_id) && typeof next.reference === 'string') setEvent(next)
+                  if (isPaymentActivity(next)) {
+                    setEvent(next)
+                    const userId = identity.user.id
+                    setNotificationState((current) => {
+                      const existing = current.userId === userId ? current.items : readNotifications(userId)
+                      if (existing.some((item) => item.id === next.id)) return { userId, items: existing }
+                      const items = [next, ...existing].sort((left, right) => right.occurred_at.localeCompare(left.occurred_at))
+                      storeNotifications(userId, items)
+                      return { userId, items }
+                    })
+                  }
                 } catch { /* Ignore malformed stream events; a fresh payment read is authoritative. */ }
               }
               if (line === '') eventName = ''
@@ -77,7 +137,8 @@ export function PaymentEventProvider({ children }: { children: ReactNode }) {
     return () => { live = false; controller?.abort() }
   }, [config.API_ORIGIN, identity?.token, invalidate, paused])
 
-  const value = useMemo(() => ({ connection, event, disconnect: () => setPaused(true), reconnect: () => setPaused(false) }), [connection, event])
+  const notifications = identity && notificationState.userId === identity.user.id ? notificationState.items : []
+  const value = useMemo(() => ({ connection, event, notifications, dismissNotification, disconnect: () => setPaused(true), reconnect: () => setPaused(false) }), [connection, event, notifications, dismissNotification])
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>
 }
 

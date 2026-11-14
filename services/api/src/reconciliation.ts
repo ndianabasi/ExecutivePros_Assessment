@@ -9,6 +9,7 @@ import { immediate } from './sqlite.js'
 
 interface Candidate {
   id: number
+  user_id: number
   reference: string
   amount_minor: number
   currency: string
@@ -35,7 +36,7 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     const leaseUntil = new Date(now.getTime() + config.providerTimeoutMs + 5000).toISOString()
     return immediate(db, async (tx) => {
       const due = await tx.query<Omit<Candidate, 'claim_token' | 'history_id'>>(
-        `SELECT id, reference, amount_minor, currency, checkout_expires_at, reconcile_attempts
+        `SELECT id, user_id, reference, amount_minor, currency, checkout_expires_at, reconcile_attempts
          FROM payments WHERE status = 'pending'
            AND (reconcile_after IS NULL OR reconcile_after <= :now OR checkout_expires_at <= :now)
            AND (reconcile_lease_until IS NULL OR reconcile_lease_until <= :now)
@@ -81,12 +82,20 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
   }
 
   async function finishAttempt(candidate: Candidate, now: Date, outcome: string, details: string, providerStatus?: string) {
-    await db.raw(
+    const changed = await immediate(db, (tx) => tx.query<{ id: number }>(
       `UPDATE payment_reconciliation_attempts
        SET outcome = :outcome, redacted_details = :details, provider_status = :provider_status, completed_at = :completed_at
-       WHERE id = :id AND outcome = 'in_progress'`,
+       WHERE id = :id AND outcome = 'in_progress' RETURNING id`,
       { outcome, details, provider_status: providerStatus ?? null, completed_at: now.toISOString(), id: candidate.history_id },
-    )
+    ), config.sqliteLockAttempts)
+    if (changed.length) eventHub?.publish(candidate.user_id, {
+      type: 'reconciliation_completed', payment_id: candidate.id, reference: candidate.reference,
+      title: 'Provider Reconciliation Completed',
+      message: `Provider status lookup attempt ${candidate.reconcile_attempts} completed: ${outcome.replaceAll('_', ' ')}. ${details}`,
+      source: 'reconciliation', attempt_number: candidate.reconcile_attempts,
+      ...(providerStatus && ['pending', 'success', 'failed', 'cancelled'].includes(providerStatus) ? { status: providerStatus as 'pending' | 'success' | 'failed' | 'cancelled' } : {}),
+      occurred_at: now.toISOString(),
+    })
   }
 
   async function recordExpiryLookupFailure(candidate: Candidate, now: Date, error: unknown) {
@@ -193,6 +202,12 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     if (active) return active
     active = (async () => {
       const candidates = await claim(now)
+      for (const candidate of candidates) eventHub?.publish(candidate.user_id, {
+        type: 'reconciliation_started', payment_id: candidate.id, reference: candidate.reference,
+        title: 'Provider Reconciliation Started',
+        message: `Provider status lookup attempt ${candidate.reconcile_attempts} started.`,
+        source: 'reconciliation', attempt_number: candidate.reconcile_attempts, status: 'pending', occurred_at: now.toISOString(),
+      })
       await Promise.all(candidates.map((candidate) => process(candidate, now).catch(async (error) => {
         logger.error({ payment_reference: candidate.reference, error_type: error instanceof Error ? error.name : 'unknown' }, 'payment reconciliation processing failed')
         await finishAttempt(candidate, now, 'reconciliation_processing_failed', 'API could not complete this reconciliation attempt.')

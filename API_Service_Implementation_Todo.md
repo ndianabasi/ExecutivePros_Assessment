@@ -145,9 +145,10 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
 - [x] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
 - [ ] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
-- [x] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped status events, heartbeat, and disconnect cleanup.
+- [x] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped payment activity events, heartbeat, and disconnect cleanup.
 - [x] Publish SSE only after payment commit; keep payment outcome independent of SSE or email failure.
-- [x] Include payment ID, reference, status, and request/event ID in SSE events without leaking another user's data to admin streams.
+- [x] Include unique event ID, timestamp, payment ID/reference, safe title/message, and relevant status/source/attempt/request metadata; never leak another user's data to admin streams.
+- [x] Emit checkout acceptance/provider initialization, webhook receipt and verification/result, reconciliation start/result, and terminal success/failure/cancellation activity; correlate invalid-signature events only through a validated candidate reference and never expose unsigned payload data.
 - [x] Support client reconnect by making `GET /v1/payments/:payment_id` authoritative for current state; do not put Bearer tokens in SSE URLs.
 
 ## 11. Security, logging, diagnostics, and OpenAPI
@@ -184,7 +185,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] **Webhook:** success/failure/cancellation, sequential/concurrent duplicates, altered duplicate ID, conflicting terminal event, wrong reference/amount/currency, bad signature, malformed body, and rollback return the specified outcomes.
 - [ ] **Webhook crash recovery:** replay after commit-before-ack creates no second fulfilment, stock change, or outbox intent.
 - [x] **Reconciliation/expiry service gates:** provider fixture tests cover missing-webhook recovery, provider outage, day-30 pending result, concurrent expiry/webhook, and late success with expected terminal state, reservation, incident, and alert. Real-provider e2e also proves the provider's skipped-webhook status is reconciled into one fulfilment.
-- [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, possible duplicate queue job/email, SSE disconnect/reconnect, and event isolation pass without changing the one API intent or committed payment state.
+- [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, possible duplicate queue job/email, SSE disconnect/reconnect, complete payment activity event order, invalid-signature incident visibility, and event isolation pass without changing the one API intent or committed payment state.
 - [x] **Contract service gates:** OpenAPI route/auth/status declarations and provider initialization/status plus queue durable acceptance/correlation fixtures pass. Webhook fixture coverage is exercised in integration/e2e; uncertain queue acknowledgement duplication remains open.
 - [ ] **Compose end-to-end:** real containers pass login → cart → checkout → provider completion → webhook → paid cart/fulfilment/stock/email/SSE, with final database and log assertions.
 - [x] **Compose failure end-to-end:** duplicate webhook, provider timeout, missed webhook reconciliation, invalid signature, and queue outage/recovery pass with final-state assertions.

@@ -85,6 +85,8 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 ## 6. SSE and fresh payment state
 
 - [x] Open `GET /v1/events` through an Authorization-capable fetch stream; never put the token in a query string.
+- [x] Render each checkout/provider/webhook/reconciliation/payment outcome event as an in-app notification with timestamp and payment detail link.
+- [x] Persist notifications by selected user across routes and reloads; retain each until explicit user dismissal and isolate users' stored activity.
 - [x] On each payment status event, fetch the affected payment again before updating displayed state.
 - [x] Reconnect with bounded backoff after interruption and show an **Updates disconnected** state while offline.
 - [x] Refetch the visible payment immediately on SSE reconnect.
@@ -127,7 +129,7 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - [ ] **Checkout:** `201`/`200`/`202`, persisted key, uncertain same-key replay, failed-payment new-key retry, ordinary duplicate-click guard, and paid-cart rejection pass.
 - [ ] **Frame security:** invalid provider URL, iframe sandbox/CSP, blocked frame, new-tab fallback, and no token disclosure pass.
 - [ ] **Message handling:** spoofed origin/source/reference, malformed/stale messages, valid hint plus fresh API read, and pending-after-hint close behavior pass.
-- [ ] **SSE/status:** Bearer fetch stream, event refetch, disconnect/reconnect, manual refresh, owner isolation, token-expiry cleanup, and terminal API confirmation pass without polling.
+- [ ] **SSE/status:** Bearer fetch stream, full activity events, persistent/dismissible per-user notification list, event refetch, disconnect/reconnect, manual refresh, owner isolation, token-expiry cleanup, and terminal API confirmation pass without polling.
 - [ ] **Scenario demos:** fresh catalogue, ordinary checkout on catalogue failure, exclusive selection, double checkout, timeout replay, SSE disconnect, and clear explanations pass for normal/admin users.
 - [ ] **Payment pages:** owner/admin scope, pagination, detail/attempts/fulfilment, safe incident summary, `404`, pending state, and retryable-cart flow pass.
 - [ ] **Accessibility/responsive:** keyboard/screen-reader flow, dialog focus and announcements, contrast, narrow screens, and status outside iframe pass.

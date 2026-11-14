@@ -77,12 +77,36 @@ export interface PageMeta {
   total: number
 }
 
-export interface PaymentEvent {
+export type PaymentActivityType =
+  | 'payment_pending'
+  | 'provider_initialization_started'
+  | 'provider_initialization_succeeded'
+  | 'provider_initialization_retry_scheduled'
+  | 'webhook_received'
+  | 'webhook_verification_succeeded'
+  | 'webhook_verification_failed'
+  | 'webhook_result'
+  | 'reconciliation_started'
+  | 'reconciliation_completed'
+  | 'payment_succeeded'
+  | 'payment_failed'
+  | 'payment_cancelled'
+
+export interface PaymentActivityNotification {
+  id: string
+  type: PaymentActivityType
   payment_id: number
   reference: string
-  status: PaymentSummary['status']
+  occurred_at: string
+  title: string
+  message: string
+  status?: PaymentSummary['status']
+  source?: 'webhook' | 'reconciliation' | 'provider_initialization' | 'api'
+  attempt_number?: number
   request_id?: string
 }
+
+export type PaymentEvent = PaymentActivityNotification
 
 export interface ApiEnvelope<T> {
   data: T

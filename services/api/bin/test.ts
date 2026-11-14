@@ -17,6 +17,7 @@ import { createApp } from '../src/app.js'
 import { ProviderClient } from '../src/provider.js'
 import { EmailQueueClient } from '../src/queue.js'
 import { createNotificationOutboxDispatcher } from '../src/notification-outbox.js'
+import { PaymentEventHub } from '../src/payment-events.js'
 import type { ApiTestFixture } from '../tests/macros.js'
 import '../tests/macros.js'
 
@@ -151,19 +152,22 @@ async function setupApiTest(testCase: Test) {
       QUEUE_TIMEOUT_MS: '250', OUTBOX_RETRY_INITIAL_MS: '10', OUTBOX_RETRY_MAX_MS: '1000',
     })
     const dispatcher = createNotificationOutboxDispatcher(db, new EmailQueueClient(queueUrl, fixtureConfig.queueServiceSecret, fixtureConfig.queueTimeoutMs), fixtureConfig)
+    const eventHub = new PaymentEventHub()
     const apiApp = createApp({
       db, isReady: () => true,
       frontendOrigin: fixtureConfig.frontendOrigin, docsOrigin: fixtureConfig.docsOrigin,
       provider: new ProviderClient(fixtureConfig.providerBaseUrl, fixtureConfig.providerServiceSecret, fixtureConfig.providerTimeoutMs),
       config: fixtureConfig,
+      eventHub,
     })
     apiServer = createServer(apiApp).listen(apiTestPort, '127.0.0.1')
     await listen(apiServer, apiTestPort)
-    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls, providerLookups, apiPort: apiTestPort, queue,
+    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, eventHub, providerInitCalls, providerLookups, apiPort: apiTestPort, queue,
       dispatchOutbox: () => dispatcher.dispatchDue() }
     testCase.context.apiFixture = apiFixture
     return async () => {
       await close(apiServer!)
+      eventHub.close()
       await dispatcher.close()
       await close(queueServer!)
       await close(providerServer!)
@@ -224,6 +228,7 @@ async function setupRealProviderE2E(testCase: Test) {
   let queueProcess: ChildProcess | undefined
   let apiServer: Server | undefined
   let dispatcher: ReturnType<typeof createNotificationOutboxDispatcher> | undefined
+  const eventHub = new PaymentEventHub()
   let mailpitName: string | undefined
   let providerOutput = ''
   let queueOutput = ''
@@ -307,16 +312,18 @@ async function setupRealProviderE2E(testCase: Test) {
       frontendOrigin: fixtureConfig.frontendOrigin, docsOrigin: fixtureConfig.docsOrigin,
       provider: new ProviderClient(fixtureConfig.providerBaseUrl, fixtureConfig.providerServiceSecret, fixtureConfig.providerTimeoutMs),
       config: fixtureConfig,
+      eventHub,
     })
     dispatcher = createNotificationOutboxDispatcher(db, new EmailQueueClient(fixtureConfig.queueBaseUrl, queueSecret, fixtureConfig.queueTimeoutMs), fixtureConfig)
     apiServer = createServer(apiApp)
     await listen(apiServer, apiTestPort)
-    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls: { count: 0 },
+    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, eventHub, providerInitCalls: { count: 0 },
       providerLookups: { status: 404, delayMs: 0, started: false }, apiPort: apiTestPort,
       dispatchOutbox: () => dispatcher!.dispatchDue() }
     testCase.context.apiFixture = apiFixture
     return async () => {
       await close(apiServer!)
+      eventHub.close()
       await dispatcher?.close()
       await stopChild(providerProcess)
       await stopChild(queueProcess)

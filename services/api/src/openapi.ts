@@ -64,8 +64,8 @@ const paths: Record<string, Record<string, Operation | Record<string, unknown>>>
     responses: { '200': jsonResponse('Accepted or duplicate event'), '400': jsonResponse('Malformed event'), '401': jsonResponse('Invalid signature'), '409': jsonResponse('Event ID conflict'), '422': jsonResponse('Payment evidence mismatch'), '503': jsonResponse('Transient processing failure') } } },
   '/v1/payments': { get: { ...operation('get', 'listPayments', 'List own payments or all payments for an admin', ['Payments']), parameters: [{ in: 'query', name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } }, { in: 'query', name: 'page_size', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }] } },
   '/v1/payments/{payment_id}': { get: { ...operation('get', 'getPayment', 'Read a payment and fulfillment details', ['Payments']), parameters: [{ in: 'path', name: 'payment_id', required: true, schema: { type: 'integer', minimum: 1 } }] } },
-  '/v1/events': { get: { ...operation('get', 'paymentEvents', 'Stream owner-scoped payment status updates', ['Events']),
-    responses: { '200': { description: 'Server-sent payment status events', content: { 'text/event-stream': { schema: { type: 'string' } } }, '401': jsonResponse('Authentication failed') } } } },
+  '/v1/events': { get: { ...operation('get', 'paymentEvents', 'Stream owner-scoped payment activity notifications', ['Events']),
+    responses: { '200': { description: 'Server-sent checkout, provider initialization, webhook receipt and verification, payment result, and reconciliation activity records; delivery is live-only and not replayed after reconnect', content: { 'text/event-stream': { schema: { type: 'string' } } }, '401': jsonResponse('Authentication failed') } } } },
   '/v1/admin/diagnostics': { get: operation('get', 'getAdminDiagnostics', 'Read payment and notification backlog counters', ['Operations']) },
 }
 

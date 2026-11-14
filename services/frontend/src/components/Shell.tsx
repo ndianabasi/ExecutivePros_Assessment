@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router'
 import { Button } from './ui/button'
 import { useSession } from '../session'
 import { usePaymentEvents } from '../events'
+import { PaymentNotifications } from './PaymentNotifications'
 
 export function Shell() {
   const { identity, config, logout } = useSession()
@@ -28,6 +29,7 @@ export function Shell() {
       <span>{connection === 'connected' ? 'Payment updates connected' : connection === 'disconnected' || connection === 'connecting' ? 'Updates disconnected' : 'Updates stopped'}</span>
       <span className="sm:hidden">{identity.user.first_name} ({identity.user.role})</span>
     </div>
+    <PaymentNotifications />
     <main className="mx-auto max-w-6xl px-4 py-6"><Outlet /></main>
   </div>
 }

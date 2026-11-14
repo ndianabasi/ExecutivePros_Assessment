@@ -1,13 +1,44 @@
-export interface PaymentStatusEvent {
+import { randomUUID } from 'node:crypto'
+
+export type PaymentActivityType =
+  | 'payment_pending'
+  | 'provider_initialization_started'
+  | 'provider_initialization_succeeded'
+  | 'provider_initialization_retry_scheduled'
+  | 'webhook_received'
+  | 'webhook_verification_succeeded'
+  | 'webhook_verification_failed'
+  | 'webhook_result'
+  | 'reconciliation_started'
+  | 'reconciliation_completed'
+  | 'payment_succeeded'
+  | 'payment_failed'
+  | 'payment_cancelled'
+
+export interface PaymentActivityEvent {
+  id: string
+  type: PaymentActivityType
   payment_id: number
   reference: string
-  status: 'success' | 'failed' | 'cancelled'
-  request_id: string
-  event_id: string | null
+  occurred_at: string
+  title: string
+  message: string
+  status?: 'pending' | 'success' | 'failed' | 'cancelled'
+  source?: 'webhook' | 'reconciliation' | 'provider_initialization' | 'api'
+  attempt_number?: number
+  request_id?: string
+}
+
+export type PaymentActivityDraft = Omit<PaymentActivityEvent, 'id' | 'occurred_at'> & { occurred_at?: string }
+
+export interface PaymentActivityTarget {
+  user_id: number
+  payment_id: number
+  reference: string
 }
 
 interface Subscriber {
-  send(event: PaymentStatusEvent): void
+  send(event: PaymentActivityEvent): void
   close(): void
 }
 
@@ -24,8 +55,14 @@ export class PaymentEventHub {
     }
   }
 
-  publish(userId: number, event: PaymentStatusEvent): void {
+  publish(userId: number, draft: PaymentActivityDraft): PaymentActivityEvent {
+    const event: PaymentActivityEvent = {
+      ...draft,
+      id: randomUUID(),
+      occurred_at: draft.occurred_at ?? new Date().toISOString(),
+    }
     for (const subscriber of this.subscribers.get(userId) ?? []) subscriber.send(event)
+    return event
   }
 
   close(): void {
