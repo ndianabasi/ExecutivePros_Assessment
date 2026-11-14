@@ -130,3 +130,37 @@ test('real provider status reconciliation recovers a deliberately skipped webhoo
   assert.isNotNull(attempt.started_at)
   assert.isNotNull(attempt.completed_at)
 })
+
+test('WEBHOOK_013 incident remains visible after provider status reconciliation', async ({ assert, client }) => {
+  const { db, config } = await useApiFixture()
+  const login = await client.post('/v1/login').json({ user_id: 1 })
+  const auth = `Bearer ${login.body().data.token as string}`
+  const cart = await client.post('/v1/cart').header('Authorization', auth).json({ items: [{ product_id: 1, quantity: 1 }] })
+  assert.equal(cart.status(), 200)
+  const checkout = await client.post('/v1/cart/checkout').header('Authorization', auth)
+    .header('Idempotency-Key', 'real-provider-invalid-signature-0001').json({ failure_scenario_code: 'WEBHOOK_013' })
+  assert.equal(checkout.status(), 201)
+  const paymentId = checkout.body().data.id as number
+  const reference = checkout.body().data.reference as string
+  const checkoutToken = new URL(checkout.body().data.payment_url as string).pathname.split('/').at(-1)
+  const completed = await fetch(`${config.providerPublicOrigin}/payments/submit`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ checkout_token: checkoutToken!, outcome: 'success' }),
+  })
+  assert.equal(completed.status, 200)
+  await waitFor(async () => Boolean(await db('payment_incidents').where({ payment_id: paymentId, code: 'invalid_webhook_signature' }).first()))
+  assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'pending')
+
+  const providerClient = new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs)
+  assert.equal((await providerClient.lookup(reference)).status, 'success')
+  await db('payments').where({ id: paymentId }).update({ reconcile_after: new Date(0).toISOString() })
+  await createPaymentReconciler(db, providerClient, config).runDue()
+
+  const detail = await client.get(`/v1/payments/${paymentId}`).header('Authorization', auth)
+  assert.equal(detail.status(), 200)
+  assert.equal(detail.body().data.status, 'success')
+  assert.equal(detail.body().data.incidents.length, 1)
+  assert.equal(detail.body().data.incidents[0].code, 'invalid_webhook_signature')
+  assert.equal(detail.body().data.reconciliation_attempts[0].outcome, 'provider_success_reconciled')
+  assert.equal(detail.body().data.reconciliation_attempts[0].provider_status, 'success')
+})

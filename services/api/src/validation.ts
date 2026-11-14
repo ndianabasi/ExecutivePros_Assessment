@@ -63,6 +63,10 @@ export const webhookSignatureValidator = vine.create(vine.object({
   signature: vine.string().regex(/^sha256=[a-f0-9]{64}$/),
 }).use(exactFields(['signature'])()))
 
+export const webhookReferenceValidator = vine.create(vine.object({
+  reference: vine.string().minLength(20).maxLength(88).regex(/^pay_[A-Za-z0-9_-]{16,80}$/),
+}).use(exactFields(['reference'])()))
+
 export const checkoutValidator = vine.create(vine.object({
   cart_id: vine.number({ strict: true }).positive().withoutDecimals().optional() as unknown as SchemaTypes,
   failure_scenario_code: vine.string().minLength(1).maxLength(64).regex(/^[A-Z0-9_]+$/).optional() as unknown as SchemaTypes,

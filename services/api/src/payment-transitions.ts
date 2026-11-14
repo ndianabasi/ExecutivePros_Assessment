@@ -228,8 +228,16 @@ export async function expirePendingPayment(db: Knex, input: {
   return expired
 }
 
-export async function recordInvalidWebhook(db: Knex, bodyHash: string) {
-  await immediate(db, async (tx) => createIncident(tx, {
-    dedupeKey: `invalid_signature:${bodyHash}`, code: 'invalid_webhook_signature', details: 'A provider webhook failed HMAC authentication',
-  }))
+export async function recordInvalidWebhook(db: Knex, bodyHash: string, unverifiedReference?: string) {
+  await immediate(db, async (tx) => {
+    const payment = unverifiedReference
+      ? (await tx.query<{ id: number; reference: string }>('SELECT id, reference FROM payments WHERE reference = :reference', { reference: unverifiedReference }))[0]
+      : undefined
+    await createIncident(tx, {
+      dedupeKey: `invalid_signature:${bodyHash}`,
+      ...(payment ? { paymentId: Number(payment.id), reference: payment.reference } : {}),
+      code: 'invalid_webhook_signature',
+      details: 'A provider webhook failed HMAC authentication; its unverified contents were not applied',
+    })
+  })
 }

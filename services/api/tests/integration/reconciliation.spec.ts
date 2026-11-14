@@ -58,6 +58,37 @@ test('reconciliation records each lookup and resolves a webhook mismatch through
   assert.isNotNull(detail.body().data.reconciliation_attempts[0].completed_at)
 })
 
+test('invalid webhook signature incident stays attached to payment after provider reconciliation', async ({ assert, client }) => {
+  const { db, config, providerLookups } = await useApiFixture()
+  const now = new Date()
+  const { paymentId, reference } = await makePendingPayment(db, new Date(now.getTime() + 86400000))
+  const event = { event_id: 'provider-invalid-signature-reconcile', event_type: 'payment.success', status: 'success', reference,
+    provider_reference: 'provider-webhook-013', amount: 250000, currency: 'NGN', occurred_at: now.toISOString() }
+  const invalidSignature = `sha256=${'0'.repeat(64)}`
+  const rejected = await client.post('/v1/webhooks/payment').header('X-Provider-Signature', invalidSignature).json(event)
+  assert.equal(rejected.status(), 401)
+  const incident = await db('payment_incidents').where({ payment_id: paymentId, code: 'invalid_webhook_signature' }).first()
+  assert.isDefined(incident)
+  assert.equal(incident.reference, reference)
+  assert.include(incident.redacted_details, 'unverified contents were not applied')
+  assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'pending')
+
+  providerLookups.status = 200
+  providerLookups.payment = { amount: 250000, currency: 'NGN', status: 'success', provider_reference: 'provider-webhook-013',
+    checkout_expires_at: new Date(now.getTime() + 86400000).toISOString() }
+  const provider = new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs)
+  const reconciler = createPaymentReconciler(db, provider, config)
+  await reconciler.runDue(now)
+
+  const login = await client.post('/v1/login').json({ user_id: 1 })
+  const detail = await client.get(`/v1/payments/${paymentId}`).header('Authorization', `Bearer ${login.body().data.token}`)
+  assert.equal(detail.status(), 200)
+  assert.equal(detail.body().data.status, 'success')
+  assert.equal(detail.body().data.incidents.length, 1)
+  assert.equal(detail.body().data.incidents[0].code, 'invalid_webhook_signature')
+  assert.equal(detail.body().data.reconciliation_attempts[0].outcome, 'provider_success_reconciled')
+})
+
 test('day-30 pending provider status fails the payment and releases stock without claiming cancellation', async ({ assert }) => {
   const { db, config, providerLookups } = await useApiFixture()
   const now = new Date()

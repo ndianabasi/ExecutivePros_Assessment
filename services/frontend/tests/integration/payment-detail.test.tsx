@@ -16,7 +16,7 @@ describe('payment detail activity', () => {
       http.get('http://api.test/v1/payments/7', () => HttpResponse.json({ data: {
         id: 7, user_id: 1, cart_id: 5, reference: 'pay_reconciled_0001', status: 'success', amount_minor: 250000, currency: 'NGN',
         created_at: '2026-11-14T06:00:00.000Z', failure_scenario_code: 'WEBHOOK_011', cart: { id: 5, items: [] }, fulfillment: null,
-        incidents: [{ id: 2, code: 'provider_amount_currency_mismatch', redacted_details: 'Signed provider evidence did not match the stored amount or currency', created_at: '2026-11-14T06:01:00.000Z', resolved_at: null }],
+        incidents: [{ id: 2, code: 'invalid_webhook_signature', redacted_details: 'A provider webhook failed HMAC authentication; its unverified contents were not applied', created_at: '2026-11-14T06:01:00.000Z', resolved_at: null }],
         reconciliation_attempts: [{ id: 3, attempt_number: 1, outcome: 'provider_success_reconciled', provider_status: 'success', redacted_details: 'Provider status success was verified and applied.', started_at: '2026-11-14T06:02:00.000Z', completed_at: '2026-11-14T06:02:01.000Z' }],
       } })),
       http.get('http://api.test/v1/carts/5', () => HttpResponse.json({ data: { id: 5, user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000, items: [], payments: [] } })),
@@ -33,7 +33,7 @@ describe('payment detail activity', () => {
     expect(rows[1]).toHaveTextContent('Provider Lookup · Attempt 1')
     expect(rows[1]).toHaveTextContent('provider success reconciled')
     expect(rows[1]).toHaveTextContent('verified and applied')
-    expect(rows[2]).toHaveTextContent('provider_amount_currency_mismatch')
-    expect(rows[2]).toHaveTextContent('Signed provider evidence did not match')
+    expect(rows[2]).toHaveTextContent('invalid_webhook_signature')
+    expect(rows[2]).toHaveTextContent('failed HMAC authentication')
   })
 })

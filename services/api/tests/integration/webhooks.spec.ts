@@ -48,6 +48,7 @@ test('signed payment success commits fulfilment, stock consumption, and one emai
     const invalidSignature = await client.post('/v1/webhooks/payment').header('X-Provider-Signature', 'sha256=' + '0'.repeat(64)).json({ ...event, event_id: 'invalid-sig-0001' })
     assert.equal(invalidSignature.status(), 401)
     assert.equal(await db('payment_incidents').count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 2)
+    assert.equal(await db('payment_incidents').where({ code: 'invalid_webhook_signature', payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
 })
 
 test('late provider success after terminal expiry stays failed and creates one admin incident', async ({ assert, client }) => {

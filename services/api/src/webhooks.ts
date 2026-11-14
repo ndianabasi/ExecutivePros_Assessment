@@ -3,7 +3,7 @@ import type { Express, Request, Response } from 'express'
 import type { Knex } from 'knex'
 import { currentRequestId, logger } from './logging.js'
 import { applyPaymentEvidence, recordInvalidWebhook, type TerminalPaymentStatus } from './payment-transitions.js'
-import { validate, webhookSignatureValidator, webhookValidator } from './validation.js'
+import { validate, webhookReferenceValidator, webhookSignatureValidator, webhookValidator } from './validation.js'
 import type { PaymentEventHub } from './payment-events.js'
 
 function error(response: Response, status: number, code: string, message: string) {
@@ -28,7 +28,14 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
     const authenticated = actual.length === expected.length && timingSafeEqual(actual, expected)
     const bodyHash = createHash('sha256').update(rawBody).digest('hex')
     if (!authenticated) {
-      try { await recordInvalidWebhook(db, bodyHash) }
+      let unverifiedReference: string | undefined
+      try {
+        const candidate: unknown = JSON.parse(rawBody.toString('utf8'))
+        if (typeof candidate === 'object' && candidate !== null && 'reference' in candidate) {
+          unverifiedReference = (await validate<{ reference: string }>(webhookReferenceValidator, { reference: candidate.reference })).reference
+        }
+      } catch { /* Invalid signatures are recorded even when their body cannot be correlated. */ }
+      try { await recordInvalidWebhook(db, bodyHash, unverifiedReference) }
       catch (incidentError) {
         logger.error({ request_id: currentRequestId(), failure: busy(incidentError) ? 'database_busy' : 'incident_write_failed' }, 'invalid webhook incident could not be recorded')
       }
