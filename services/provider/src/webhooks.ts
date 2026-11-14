@@ -398,11 +398,17 @@ export function createWebhookRuntime(db: Knex, workmaticDb: WorkmaticDb, config:
     persistState: false,
     autoRestore: false,
   })
-  worker.process(async (job: { id: string; attempts: number; payload: { event_id: string } }) => {
-    await processDelivery(db, config, job.payload.event_id)
-  })
-
   let sweeping = false
+
+  /**
+   * Registers the persisted webhook delivery handler and starts its worker loop.
+   */
+  function start() {
+    worker.process(async (job: { id: string; attempts: number; payload: { event_id: string } }) => {
+      await processDelivery(db, config, job.payload.event_id)
+    })
+    worker.start()
+  }
 
   /**
    * Coordinates schedule due events while enforcing persistence, retry, and state-transition rules.
@@ -465,5 +471,5 @@ export function createWebhookRuntime(db: Knex, workmaticDb: WorkmaticDb, config:
       sweeping = false
     }
   }
-  return { client, worker, scheduleDueEvents }
+  return { client, worker, scheduleDueEvents, start }
 }

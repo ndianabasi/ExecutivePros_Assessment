@@ -140,7 +140,8 @@ async function setupProviderTest(testCase: Test) {
     await listen(apiServer, apiPort)
 
     runtime = createWebhookRuntime(db, workmatic, config)
-    runtime.worker.start()
+    await runtime.scheduleDueEvents()
+    runtime.start()
     const app = createApp({
       db,
       config,
@@ -152,7 +153,6 @@ async function setupProviderTest(testCase: Test) {
     })
     providerServer = createServer(app)
     await listen(providerServer, providerPort)
-    await runtime.scheduleDueEvents()
     sweep = setInterval(() => {
       void runtime?.scheduleDueEvents()
     }, 20)

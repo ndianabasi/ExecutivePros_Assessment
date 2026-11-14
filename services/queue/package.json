@@ -7,7 +7,7 @@
     "node": ">=24.1.0"
   },
   "scripts": {
-    "lint": "eslint src",
+    "lint": "yarn --cwd ../.. eslint services/queue/src",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "prestart": "node dist/src/initialize-db.js",

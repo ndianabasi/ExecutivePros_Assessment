@@ -7,7 +7,7 @@
     "node": ">=24.1.0"
   },
   "scripts": {
-    "lint": "eslint src",
+    "lint": "yarn --cwd ../.. eslint services/api/src",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "test": "node --import=tsx bin/test.ts",

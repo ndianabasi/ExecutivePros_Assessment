@@ -317,12 +317,18 @@ test('retryable webhook responses retry as Workmatic rounds while permanent reje
   await waitFor(async () => fixture.api.received.length === 1)
   fixture.api.responseStatus = 204
   await waitFor(async () => fixture.api.received.length === 2)
-  const retryEvent = await fixture
-    .db('webhook_events')
-    .where({
-      payment_id: (await fixture.db('payments').where({ reference: retry.data.reference }).first()).id,
-    })
-    .first()
+  const retryEventId = (
+    await fixture
+      .db('webhook_events')
+      .where({
+        payment_id: (await fixture.db('payments').where({ reference: retry.data.reference }).first()).id,
+      })
+      .first()
+  ).id
+  await waitFor(async () => {
+    return (await fixture.db('webhook_events').where({ id: retryEventId }).first())?.status === 'delivered'
+  })
+  const retryEvent = await fixture.db('webhook_events').where({ id: retryEventId }).first()
   assert.equal(retryEvent.status, 'delivered')
   assert.equal(
     await fixture

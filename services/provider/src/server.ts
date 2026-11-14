@@ -19,8 +19,8 @@ if (!(await verifyProviderDatabase(db, config, shared.native, shared.workmatic))
   throw new Error('Provider database schema or Workmatic database is not initialized')
 }
 const runtime = createWebhookRuntime(db, shared.workmatic, config)
-runtime.worker.start()
 await runtime.scheduleDueEvents()
+runtime.start()
 const timer = setInterval(() => {
   void runtime.scheduleDueEvents().catch((error) => {
     return logger.error(

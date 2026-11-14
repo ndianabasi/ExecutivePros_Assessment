@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/write-dev-config.mjs && vite --host 0.0.0.0",
-    "lint": "eslint src",
+    "lint": "yarn --cwd ../.. eslint services/frontend/src",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
