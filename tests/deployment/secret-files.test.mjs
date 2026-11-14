@@ -12,7 +12,9 @@ test('first local deployment creates independent strong secrets and repeated set
   try {
     const hasPersistentData = async () => false
     const directory = await initializeLocalSecrets({ repositoryRoot, hasPersistentData })
-    const firstValues = await Promise.all(requiredSecrets.map((name) => readFile(secretPath(repositoryRoot, name), 'utf8')))
+    const firstValues = await Promise.all(
+      requiredSecrets.map((name) => readFile(secretPath(repositoryRoot, name), 'utf8')),
+    )
     assert.equal(new Set(firstValues).size, requiredSecrets.length)
     for (const name of requiredSecrets) {
       const info = await stat(secretPath(repositoryRoot, name))
@@ -22,8 +24,37 @@ test('first local deployment creates independent strong secrets and repeated set
     if (process.platform !== 'win32') assert.equal((await stat(directory)).mode & 0o777, 0o700)
 
     await initializeLocalSecrets({ repositoryRoot, hasPersistentData })
-    const secondValues = await Promise.all(requiredSecrets.map((name) => readFile(secretPath(repositoryRoot, name), 'utf8')))
+    const secondValues = await Promise.all(
+      requiredSecrets.map((name) => readFile(secretPath(repositoryRoot, name), 'utf8')),
+    )
     assert.deepEqual(secondValues, firstValues)
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+})
+
+test('isolated test secret files are generated idempotently outside development secrets', async () => {
+  const repositoryRoot = await mkdtemp(join(tmpdir(), 'assessment-test-secrets-'))
+  const directory = '.local/test-secrets'
+  const options = { repositoryRoot, directory, hasPersistentData: async () => false }
+
+  try {
+    await initializeLocalSecrets(options)
+    const firstValues = await Promise.all(
+      requiredSecrets.map((name) =>
+        readFile(secretPath(repositoryRoot, name, process.platform, directory), 'utf8'),
+      ),
+    )
+    await initializeLocalSecrets(options)
+    const secondValues = await Promise.all(
+      requiredSecrets.map((name) =>
+        readFile(secretPath(repositoryRoot, name, process.platform, directory), 'utf8'),
+      ),
+    )
+
+    assert.equal(new Set(firstValues).size, requiredSecrets.length)
+    assert.deepEqual(secondValues, firstValues)
+    await assert.rejects(stat(secretPath(repositoryRoot, requiredSecrets[0])))
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
   }
@@ -34,7 +65,9 @@ test('concurrent local deployments share exclusive secret creation without rotat
   try {
     const options = { repositoryRoot, hasPersistentData: async () => false }
     await Promise.all(Array.from({ length: 4 }, () => initializeLocalSecrets(options)))
-    const values = await Promise.all(requiredSecrets.map((name) => readFile(secretPath(repositoryRoot, name), 'utf8')))
+    const values = await Promise.all(
+      requiredSecrets.map((name) => readFile(secretPath(repositoryRoot, name), 'utf8')),
+    )
     assert.equal(new Set(values).size, requiredSecrets.length)
     assert.ok(values.every((value) => value.trim().length >= 32))
   } finally {

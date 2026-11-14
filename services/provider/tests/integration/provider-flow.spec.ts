@@ -289,6 +289,10 @@ test('scenario snapshots preserve skipped, duplicated, delayed, and conflicting 
   const conflictingEventIds = fixture.api.received.slice(6, 8).map((submission) => {
     return JSON.parse(submission.body.toString()).event_id as string
   })
+  await waitFor(async () => {
+    const events = await fixture.db('webhook_events').whereIn('event_id', conflictingEventIds)
+    return events.length === 2 && events.every((event) => event.status === 'delivered')
+  })
   const conflictingEvents = await fixture
     .db('webhook_events')
     .whereIn('event_id', conflictingEventIds)

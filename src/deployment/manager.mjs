@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync, statfsSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse as parseEnv } from 'dotenv'
 import { localSecretsDirectory, resolveRepositoryPath, secretPath } from './platform.mjs'
 import { ensureDefaultEnvironmentFile, setSecretFilePaths } from './env-file.mjs'
 import { initializeLocalSecrets, makeOwnerOnly } from './secret-files.mjs'
@@ -112,9 +113,10 @@ function readEnvFile(value = '.env') {
   return path
 }
 
-async function ensureSecrets(project) {
+async function ensureSecrets(project, directory = '.local/secrets') {
   return initializeLocalSecrets({
     repositoryRoot: repoRoot,
+    directory,
     hasPersistentData: async () =>
       volumeExists(volumeName(project, 'assessment_data')) ||
       volumeExists(volumeName(project, 'mailpit_data')),
@@ -180,8 +182,8 @@ function validateDockerfiles() {
   assertPinnedAlpineDockerfiles(entries)
 }
 
-function renderedConfig(project, envFile) {
-  const output = compose(project, ['config', '--format', 'json'], { envFile }).stdout
+function renderedConfig(project, envFile, env = process.env) {
+  const output = compose(project, ['config', '--format', 'json'], { envFile, env }).stdout
   const config = JSON.parse(output)
   inspectComposeConfig(config)
   return config
@@ -228,6 +230,8 @@ export function validateOrigins(config) {
 export async function preflight({
   project = defaultProject,
   envFile: requestedEnvFile = '.env',
+  secretDirectory = '.local/secrets',
+  env = process.env,
   checkPorts = true,
   step = directStep,
 } = {}) {
@@ -261,11 +265,11 @@ export async function preflight({
       throw new Error('At least 1 GiB of free workspace storage is required for image builds and cold backup')
   })
   await step('Validate pinned service images', () => validateDockerfiles())
-  await step('Ensure local service secrets', () => ensureSecrets(project))
+  await step('Ensure local service secrets', () => ensureSecrets(project, secretDirectory))
   await step('Set generated secret file paths in environment', () =>
-    setSecretFilePaths({ repositoryRoot: repoRoot, envFile }),
+    setSecretFilePaths({ repositoryRoot: repoRoot, envFile, secretDirectory }),
   )
-  const config = await step('Render Compose configuration', () => renderedConfig(project, envFile))
+  const config = await step('Render Compose configuration', () => renderedConfig(project, envFile, env))
   await step('Validate port-derived browser origins', () => validateOrigins(config))
   if (checkPorts) await checkHostPorts(project, config, step)
   return { project, envFile, config, composeVersion }
@@ -447,11 +451,11 @@ function parseComposeStatus(contents) {
   return Object.fromEntries(rows.map((row) => [row.Service, { state: row.State, health: row.Health ?? '' }]))
 }
 
-async function waitForHealthy(project, envFile = '.env', timeoutMs = 180_000) {
+async function waitForHealthy(project, envFile = '.env', timeoutMs = 180_000, env = process.env) {
   const deadline = Date.now() + timeoutMs
   let lastStatus = {}
   while (Date.now() < deadline) {
-    const result = compose(project, ['ps', '--format', 'json'], { allowFailure: true, envFile })
+    const result = compose(project, ['ps', '--format', 'json'], { allowFailure: true, envFile, env })
     if (result.status === 0) lastStatus = parseComposeStatus(result.stdout)
     const exited = Object.entries(lastStatus).find(
       ([, value]) => value.state === 'exited' || value.state === 'dead',
@@ -574,6 +578,245 @@ export async function deployLocal({
   await verifyDeploymentOrigins(config, step)
   console.log(`All six services are healthy for project ${project}; persistent volumes were preserved.`)
   console.log(`Frontend Service: http://127.0.0.1:${config.services.frontend.ports[0].published}`)
+}
+
+const serviceTestCommands = [
+  ['Root deployment policy tests', ['test:deployment']],
+  ['Root service lint', ['lint']],
+  ['Root service formatting check', ['format:check:services']],
+  ...['api', 'queue', 'provider'].flatMap((service) => {
+    const workspace = `@executivepros/${service}`
+    return [
+      [`${service} lint`, ['workspace', workspace, 'lint']],
+      [`${service} typecheck`, ['workspace', workspace, 'typecheck']],
+      [`${service} build`, ['workspace', workspace, 'build']],
+      [`${service} unit/integration/contract/e2e suites`, ['workspace', workspace, 'test']],
+    ]
+  }),
+  ...['api-docs', 'frontend'].flatMap((service) => {
+    const workspace = `@executivepros/${service}`
+    return [
+      [`${service} lint`, ['workspace', workspace, 'lint']],
+      [`${service} typecheck`, ['workspace', workspace, 'typecheck']],
+      [`${service} build`, ['workspace', workspace, 'build']],
+      [`${service} unit tests`, ['workspace', workspace, 'test:unit']],
+      [`${service} integration tests`, ['workspace', workspace, 'test:integration']],
+      [`${service} browser end-to-end tests`, ['workspace', workspace, 'test:e2e']],
+    ]
+  }),
+]
+
+/**
+ * Sends a local-only SMTP probe from the queue container and confirms Mailpit stored it.
+ *
+ * @param {string} project - Unique Compose project used by this test run.
+ * @param {string} envFile - Repository-relative Compose environment file.
+ * @param {NodeJS.ProcessEnv} env - Environment values parsed from the test environment file.
+ * @param {Function} step - Logged operation wrapper.
+ * @returns {Promise<void>} Resolves when the SMTP probe is visible in the Mailpit inbox.
+ * @throws {Error} If SMTP submission fails or the inbox does not capture the probe before timeout.
+ */
+async function verifyMailpitSmtpCapture(project, envFile, env, step) {
+  const marker = `assessment-smtp-${randomBytes(8).toString('hex')}`
+  const script = [
+    "import nodemailer from 'nodemailer'",
+    'const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT), secure: false })',
+    `await transport.sendMail({ from: process.env.SMTP_FROM, to: 'assessment-probe@example.test', subject: '${marker}', text: '${marker}' })`,
+    'await transport.close()',
+  ].join(';')
+  await step('Send an SMTP capture probe through the Compose queue network', () =>
+    compose(project, ['exec', '--no-TTY', 'queue', 'node', '--input-type=module', '-e', script], {
+      envFile,
+      env,
+    }),
+  )
+  await step('Verify Mailpit captured the SMTP probe', async () => {
+    const origin = `http://127.0.0.1:${env.MAILPIT_PORT}`
+    const deadline = Date.now() + 10_000
+    while (Date.now() < deadline) {
+      const response = await fetch(`${origin}/api/v1/messages`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(3000),
+      })
+      if (response.ok && JSON.stringify(await response.json()).includes(marker)) {
+        return true
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 150))
+    }
+    throw new Error('Mailpit did not retain the queue SMTP probe')
+  })
+}
+
+/**
+ * Starts one root Yarn workspace gate and streams its output to the terminal.
+ *
+ * @param {string[]} args - Root Yarn arguments for a single workspace gate.
+ * @param {NodeJS.ProcessEnv} env - Environment values parsed from the test environment file.
+ * @returns {{status: number, stdout: string, stderr: string}} The successful process result.
+ * @throws {Error} If Yarn cannot start or the requested test gate fails.
+ */
+function runYarn(args, env) {
+  if (process.platform === 'win32') {
+    return run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `yarn ${args.join(' ')}`], {
+      env,
+      streamOutput: true,
+    })
+  }
+  return run('yarn', args, { env, streamOutput: true })
+}
+
+/**
+ * Validates the unique host ports used by service-owned test fixtures.
+ *
+ * @param {NodeJS.ProcessEnv} environment - Parsed root test environment values.
+ * @returns {Array<[string, number]>} Named fixture ports checked before image builds.
+ * @throws {Error} If a required port is missing, invalid, or duplicated.
+ */
+function testPorts(environment) {
+  const keys = [
+    'API_TEST_PORT',
+    'PROVIDER_TEST_PORT',
+    'QUEUE_TEST_PORT',
+    'SMTP_TEST_PORT',
+    'MAILPIT_TEST_PORT',
+  ]
+  const values = keys.map((key) => {
+    const port = Number(environment[key])
+    if (!Number.isSafeInteger(port) || port < 40000 || port > 65535) {
+      throw new Error(`${key} must be set to a port between 40000 and 65535 in .env.test`)
+    }
+    return [key, port]
+  })
+  if (new Set(values.map(([, port]) => port)).size !== values.length) {
+    throw new Error('The API, provider, queue, SMTP, and Mailpit fixture ports in .env.test must be unique')
+  }
+  return values
+}
+
+/**
+ * Provisions a fresh isolated Compose stack and runs every service test gate.
+ *
+ * @param {object} options - Test deployment configuration.
+ * @param {string} [options.envFile='.env.test'] - Root environment file used for isolated test ports and Compose settings.
+ * @returns {Promise<void>} Resolves only when all suites pass and the successful disposable stack is removed.
+ * @throws {Error} If setup, health checks, or any service test command fails.
+ */
+export async function testAll({ envFile: requestedEnvFile = '.env.test' } = {}) {
+  const step = (label, action) => runLoggedStep(label, action)
+  const project = `e2e-${process.pid}-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`
+  const secretDirectory = '.local/test-secrets'
+  let stackMayExist = false
+  let allPassed = false
+  let composeEnvironment = process.env
+  let cleanupFailure
+
+  try {
+    const envFile = await step('Create or complete the isolated .env.test from its example', () =>
+      ensureDefaultEnvironmentFile({
+        repositoryRoot: repoRoot,
+        envFile: requestedEnvFile,
+        exampleFile: '.env.test.example',
+        createCustomFromExample: true,
+        mergeMissingCustomDefaults: true,
+      }),
+    )
+    await step('Generate or validate isolated test secrets', () =>
+      initializeLocalSecrets({
+        repositoryRoot: repoRoot,
+        directory: secretDirectory,
+        hasPersistentData: async () => false,
+      }),
+    )
+    await step('Write isolated secret file paths into .env.test', () =>
+      setSecretFilePaths({ repositoryRoot: repoRoot, envFile: requestedEnvFile, secretDirectory }),
+    )
+
+    const envValues = await step('Read .env.test for test and Compose configuration', async () =>
+      parseEnv(await readFile(envFile, 'utf8')),
+    )
+    const env = { ...process.env, ...envValues, NODE_ENV: 'test' }
+    composeEnvironment = env
+    const { config } = await preflight({
+      project,
+      envFile: requestedEnvFile,
+      secretDirectory,
+      env,
+      step,
+    })
+    const publishedPorts = new Set(
+      Object.values(config.services).flatMap((service) =>
+        (service.ports ?? []).map((port) => Number(port.published)),
+      ),
+    )
+    for (const [name, port] of testPorts(envValues)) {
+      if (publishedPorts.has(port)) {
+        throw new Error(`${name} must differ from every Compose host port in .env.test`)
+      }
+      await step(`Check test fixture port ${port} availability`, () => checkPortAvailable(port, project))
+    }
+
+    const testCompose = (name, args, options = {}) => {
+      return compose(name, args, { ...options, envFile: requestedEnvFile, env })
+    }
+    await step('Build all six isolated test service images', () =>
+      testCompose(project, ['--progress', 'plain', 'build'], { streamOutput: true }),
+    )
+    stackMayExist = true
+    await createVolumes(project, step)
+    await step('Prepare isolated test database directories', () => prepareDataDirectories(project))
+    await startAfterMigrations(project, requestedEnvFile, testCompose, step)
+    await step('Wait for all six test services to become healthy', () =>
+      waitForHealthy(project, requestedEnvFile, 180_000, env),
+    )
+    await verifyDeploymentOrigins(config, step)
+    await verifyMailpitSmtpCapture(project, requestedEnvFile, env, step)
+
+    const origins = Object.fromEntries(
+      ['frontend', 'docs', 'provider', 'api', 'mailpit'].map((service) => [
+        service,
+        `http://127.0.0.1:${config.services[service].ports[0].published}`,
+      ]),
+    )
+    const testEnv = {
+      ...env,
+      QUEUE_SERVICE_SECRET_FILE: '',
+      PROVIDER_SERVICE_SECRET_FILE: '',
+      PROVIDER_WEBHOOK_SECRET_FILE: '',
+      API_ORIGIN_TEST: origins.api,
+      LIVE_API_ORIGIN: origins.api,
+      PROVIDER_ORIGIN_TEST: origins.provider,
+      DOCS_TEST_URL: origins.docs,
+      FRONTEND_TEST_URL: origins.frontend,
+    }
+    console.log(`Isolated test Frontend Service: ${origins.frontend}`)
+    for (const [label, args] of serviceTestCommands) {
+      await step(`Run ${label}`, () => runYarn(args, testEnv))
+    }
+    allPassed = true
+  } finally {
+    if (stackMayExist) {
+      const cleanupArgs = ['down', '--remove-orphans', ...(allPassed ? ['--volumes'] : [])]
+      try {
+        await step(
+          allPassed
+            ? 'Remove successful disposable test stack and volumes'
+            : 'Remove failed test containers and retain volumes for diagnosis',
+          () => compose(project, cleanupArgs, { envFile: requestedEnvFile, env: composeEnvironment }),
+        )
+      } catch (error) {
+        cleanupFailure = error
+        const detail = error instanceof Error ? error.message : String(error)
+        console.error(`Test stack cleanup failed for ${project}: ${detail}`)
+      }
+      if (!allPassed) {
+        console.error(`Failed test volumes are retained under Compose project ${project}.`)
+      }
+    }
+  }
+  if (allPassed && cleanupFailure) {
+    throw new Error(`All suites passed, but disposable project ${project} could not be removed`)
+  }
+  console.log(`All root and service test gates passed for isolated project ${project}.`)
 }
 
 export async function migrateUp({ project = defaultProject, envFile: requestedEnvFile = '.env' } = {}) {

@@ -115,6 +115,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 ## 6. Root automated test gates — check only after passing
 
 - [x] Run and record the six service documents' applicable test suites: Japa v5 for API/queue/provider, frontend Vitest/React Testing Library/MSW and Playwright, docs static/browser checks, and real Mailpit image/SMTP/HTTP checks.
+- [x] Provide root `yarn test:all`: idempotently complete `.env.test`, generate separate test-only secrets, verify all Compose and fixture ports, build/start a fresh six-service project, wait for health/origin gates, run every service's defined lint/typecheck/build/unit/integration/contract/e2e suite, perform an SMTP-to-Mailpit capture probe, remove successful test volumes, and retain uniquely named failed-run volumes for diagnosis.
 - [x] Use a unique disposable Compose project, separate volumes, and separately allocated loopback ports for root tests; never mutate the developer demo project.
 - [x] **T1 Compose/config:** verify six regular services, correct Dockerfiles/build contexts, Alpine pins, project-scoped volume subpaths, private network, loopback publications, internal-only queue/SMTP, and secret-safe rendered config.
 - [x] **T2 Artifact/permissions:** verify six non-root images, Mailpit source build, local Swagger assets, native SQLite module load, restricted writable paths, and failed cross-service DB access.
@@ -125,6 +126,12 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [x] **T7 Data safety:** verify cold backup includes all three SQLite databases and WAL sidecars, isolated restore integrity/readiness, normal stop/start persistence, and test/demo volume separation.
 - [ ] **T8 Documentation:** have a reviewer use the README from clean checkout through scenario walkthrough, tests, API information, limitations, and gate evidence.
 - [x] Record every root/service test command, result, and skipped/blocked suite; do not treat a build or partial smoke as system acceptance.
+
+### Full root acceptance run — 2026-11-14
+
+- `yarn test:all`: passed on isolated Compose project `e2e-45332-mwg9gdfe-73f76d`; all six services became healthy, the queue-to-Mailpit SMTP probe appeared in the inbox, and the runner removed that project's containers and volumes after every gate passed.
+- Root deployment tests: **28 passed**. API Japa: **38 passed**. Queue and provider Japa suites passed. API Docs: lint/typecheck/build, **7 unit**, **2 integration**, and **6 browser** tests passed. Frontend: lint/typecheck/build, **13 unit**, **10 integration**, and **7 browser** tests passed. Root lint and service formatting checks passed.
+- The initial orchestration runs exposed and fixed test-only secret-file inheritance and a provider event-state assertion race. Failed-run volumes were retained for diagnosis as designed; the successful run above used a new project.
 
 ## 7. Deployment and submission gates — complete in order
 

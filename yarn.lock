@@ -3608,6 +3608,7 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:9.39.5"
     commander: "npm:15.1.0"
+    dotenv: "npm:18.0.10"
     eslint: "npm:9.39.5"
     eslint-plugin-jsdoc: "npm:63.3.3"
     globals: "npm:17.14.0"

@@ -82,6 +82,14 @@ yarn status
 
 `deploy:local` creates `.env` from `.env.example` on first run, preserves it on later runs, generates three independent random service/HMAC secret files, writes their relative file paths into `.env`, then reads that environment file for the deployment. It checks versions, free space, image pins, origins, ports and rendered Compose config; builds the six images with live Docker layer progress; prepares project volume subpaths; runs API, provider, then queue initialization in removed one-shot containers; starts the six services; waits for health; and checks browser origins, API CORS/OpenAPI, and provider framing. It does not run down migrations.
 
+To build an isolated test deployment and run the repository and service test gates, use:
+
+```sh
+yarn test:all
+```
+
+The command creates `.env.test` from `.env.test.example` when needed and appends any newly introduced defaults without replacing your existing test settings. It generates separate owner-only secrets under `.local/test-secrets/`, reads `.env.test`, verifies host and fixture port availability, and builds and starts all six services in a unique disposable Compose project. It waits for health and verifies the service origins before running root deployment tests, lint/format/typecheck/build checks, and the API, queue, provider, API Documentation, and Frontend unit, integration, contract, and end-to-end suites that each workspace defines. The frontend and documentation browser suites target the isolated test stack. On success, the command removes that test project's containers and volumes. If a gate fails, it removes the containers but retains that uniquely named project's volumes for diagnosis; the project name is printed in the output. The regular development project, `.env`, and its persistent data are not used by this command.
+
 Secret values live only in ignored `.local/secrets/` files with owner-only access and are mounted into their service consumers. The first deployment generates all three automatically; repeated or concurrent deploys reuse the same values. `.env` stores only repository-relative secret file paths, which work on Windows, Linux, and macOS. POSIX hosts use directory mode `0700` and file mode `0600`; Windows uses `icacls` to remove inherited access and grant the current user access. Container secret paths stay `/run/secrets/...` on every host. If project data exists but a secret is missing, deployment stops and asks for the original secret to be restored. Never copy secret values into `.env`, browser config, URLs, logs, reports, or commits.
 
 ## Local endpoints

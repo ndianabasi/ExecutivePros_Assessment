@@ -9,16 +9,25 @@ export function resolveRepositoryPath(repositoryRoot, value, platform = process.
   const absoluteRoot = paths.resolve(repositoryRoot)
   const absolutePath = paths.resolve(absoluteRoot, value)
   const relativePath = paths.relative(absoluteRoot, absolutePath)
-  if (!relativePath || relativePath === '..' || relativePath.startsWith(`..${paths.sep}`) || paths.isAbsolute(relativePath)) {
+  if (
+    !relativePath ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${paths.sep}`) ||
+    paths.isAbsolute(relativePath)
+  ) {
     throw new Error('Path must name a file inside the repository')
   }
   return absolutePath
 }
 
-export function localSecretsDirectory(repositoryRoot, platform = process.platform) {
-  return pathApiFor(platform).join(repositoryRoot, '.local', 'secrets')
+export function localSecretsDirectory(
+  repositoryRoot,
+  platform = process.platform,
+  directory = '.local/secrets',
+) {
+  return pathApiFor(platform).resolve(repositoryRoot, directory)
 }
 
-export function secretPath(repositoryRoot, name, platform = process.platform) {
-  return pathApiFor(platform).join(localSecretsDirectory(repositoryRoot, platform), name)
+export function secretPath(repositoryRoot, name, platform = process.platform, directory = '.local/secrets') {
+  return pathApiFor(platform).join(localSecretsDirectory(repositoryRoot, platform, directory), name)
 }
