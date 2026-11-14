@@ -6,6 +6,7 @@ COPY services/api/package.json services/api/package.json
 COPY services/queue/package.json services/queue/package.json
 COPY services/provider/package.json services/provider/package.json
 COPY services/api-docs/package.json services/api-docs/package.json
+COPY services/frontend/package.json services/frontend/package.json
 RUN corepack yarn install --immutable
 COPY services/api-docs services/api-docs
 RUN corepack yarn workspace @executivepros/api-docs build && corepack yarn workspaces focus @executivepros/api-docs --production

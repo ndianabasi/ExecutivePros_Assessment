@@ -1,0 +1,43 @@
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
+import { useLayoutEffect, useRef } from 'react'
+import { PaymentEventProvider } from './events'
+import { Shell } from './components/Shell'
+import { LoginPage } from './pages/LoginPage'
+import { PaymentDetailPage } from './pages/PaymentDetailPage'
+import { PaymentsPage } from './pages/PaymentsPage'
+import { ProductsPage } from './pages/ProductsPage'
+import { useSession } from './session'
+
+function RootRedirect() {
+  const { identity } = useSession()
+  return <Navigate to={identity ? '/products' : '/login'} replace />
+}
+
+function Protected() {
+  const { identity } = useSession()
+  return identity ? <Outlet /> : <Navigate to="/login" replace />
+}
+
+function RouteRequestCleanup() {
+  const { pathname } = useLocation()
+  const { api } = useSession()
+  const previousPath = useRef(pathname)
+  useLayoutEffect(() => {
+    if (previousPath.current !== pathname) api.abortAll()
+    previousPath.current = pathname
+  }, [api, pathname])
+  return null
+}
+
+export function App() {
+  return <PaymentEventProvider><RouteRequestCleanup /><Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route element={<Protected />}><Route element={<Shell />}>
+      <Route path="/" element={<RootRedirect />} />
+      <Route path="/products" element={<ProductsPage />} />
+      <Route path="/payments" element={<PaymentsPage />} />
+      <Route path="/payments/:paymentId" element={<PaymentDetailPage />} />
+    </Route></Route>
+    <Route path="*" element={<RootRedirect />} />
+  </Routes></PaymentEventProvider>
+}

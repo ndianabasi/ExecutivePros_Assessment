@@ -1,4 +1,34 @@
 services:
+  frontend:
+    build:
+      context: .
+      dockerfile: services/frontend/Dockerfile
+    image: executivepros-frontend:0.1.0
+    init: true
+    restart: unless-stopped
+    environment:
+      API_ORIGIN: ${API_PUBLIC_ORIGIN:-http://127.0.0.1:18083}
+      PROVIDER_ORIGIN: ${PROVIDER_PUBLIC_ORIGIN:-http://127.0.0.1:18082}
+      DOCS_ORIGIN: ${DOCS_ORIGIN:-http://127.0.0.1:18081}
+      MAILPIT_ORIGIN: ${MAILPIT_ORIGIN:-http://127.0.0.1:18025}
+    ports:
+      - "127.0.0.1:18080:8080"
+    networks:
+      - assessment
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "10005:10005"
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/health/ready]
+      interval: 15s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
   docs:
     build:
       context: .
