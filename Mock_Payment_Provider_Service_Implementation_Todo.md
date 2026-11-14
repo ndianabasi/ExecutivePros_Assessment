@@ -59,7 +59,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Implement read-only `GET /payments/:reference` with authoritative provider status, reference, provider reference, amount, currency, payment URL, and cutoff.
 - [x] Return `404` from status lookup until delayed initialization actually commits; never treat this read route as payment confirmation.
 - [x] Implement `GET /failure-scenarios` with only active code/name/description/category in stable code order and no edit API or secret config.
-- [ ] For `PROVIDER_001`, delay 30 seconds before persistence, continue after client disconnect, and converge same-reference retries on one row.
+- [x] For `PROVIDER_001`, delay 30 seconds before persistence, continue after client disconnect, and converge same-reference retries on one row.
 - [ ] For `PROVIDER_002`, return HTTP `500` before persistence; do not leave a provider payment row.
 - [x] Keep lost-response-after-commit behavior in an external test proxy, not a runtime provider scenario or route.
 
@@ -101,7 +101,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 
 ## 7. Seeded scenario behavior
 
-- [ ] `PROVIDER_001`: 30-second pre-persistence initialization delay.
+- [x] `PROVIDER_001`: 30-second pre-persistence initialization delay.
 - [x] `PROVIDER_002`: HTTP `500` before provider payment creation.
 - [x] `WEBHOOK_001`: two concurrent HTTP copies of the same event ID and bytes.
 - [x] `WEBHOOK_002`: three sequential copies of the same event ID and bytes, one second apart.
@@ -180,6 +180,11 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [ ] Verify the API passes one immutable `checkout_expires_at` and treats provider HTTP `500` as a retryable initialization result.
 - [ ] Verify API read-only status lookup uses `GET /payments/:reference` and treats `404` during delayed initialization as unresolved, not terminal failure.
 - [ ] Verify the frontend validates the provider URL origin, permits the provider iframe, treats `postMessage` as a hint, and refetches API payment state.
+
+## Recorded progress — 2026-11-14
+
+- On isolated `e2e-restore-3`, API checkout with `PROVIDER_001` returned `202` without a payment URL while provider initialization was delayed. Same-key replay after persistence returned `200` with the same payment ID and a ready URL; authenticated status lookup resolved the same reference. Provider SQLite confirmed one `PROVIDER_001` row for one reference. The provider cancellation flow released the API reservation.
+- During an API outage, provider webhook delivery retained its event and retried four times before receiving `200` after API restart. Provider remained ready while API was stopped; later `WEBHOOK_003` delayed delivery was acknowledged after a provider restart.
 
 ## 12. Progress and verification record
 

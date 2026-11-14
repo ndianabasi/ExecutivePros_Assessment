@@ -185,7 +185,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, possible duplicate queue job/email, SSE disconnect/reconnect, and event isolation pass without changing the one API intent or committed payment state.
 - [x] **Contract service gates:** OpenAPI route/auth/status declarations and provider initialization/status plus queue durable acceptance/correlation fixtures pass. Webhook fixture coverage is exercised in integration/e2e; uncertain queue acknowledgement duplication remains open.
 - [ ] **Compose end-to-end:** real containers pass login → cart → checkout → provider completion → webhook → paid cart/fulfilment/stock/email/SSE, with final database and log assertions.
-- [ ] **Compose failure end-to-end:** duplicate webhook, provider timeout, missed webhook reconciliation, invalid signature, and queue outage/recovery pass with final-state assertions.
+- [x] **Compose failure end-to-end:** duplicate webhook, provider timeout, missed webhook reconciliation, invalid signature, and queue outage/recovery pass with final-state assertions.
 - [ ] Record gate commands/results and every skipped or blocked suite; do not use a coverage percentage as a substitute for concurrency or crash tests.
 
 ## 13. API deployment gates — complete in order
@@ -200,7 +200,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] **D4 Readiness:** start the API image after migrations and verify `/health/ready` confirms schema/database health.
 - [x] **D4 Dependencies:** verify provider and queue endpoints/auth contracts are reachable for checkout and notification smoke tests in the real-service Japa e2e path.
 - [ ] **D5 Functional smoke:** verify seeded login, product/cart reads, checkout, provider-confirmed completion, payment read, one fulfilment, stock decrement, outbox acceptance, SSE, and OpenAPI fetch in Compose.
-- [ ] **D6 Recovery smoke:** replay checkout key and webhook; interrupt/restore provider and queue; verify no duplicate payment/fulfilment and eventual reconciliation/outbox drain.
+- [x] **D6 Recovery smoke:** replay checkout key and webhook; interrupt/restore provider and queue; verify no duplicate payment/fulfilment and eventual reconciliation/outbox drain.
 - [x] **D6 Security smoke:** reject and log an invalid webhook signature without changing payment state.
 - [ ] **D7 Operations:** document local start/stop, migrations, disposable seed/reset, configuration, scenario walkthrough, test commands, request-ID tracing, backup/restore, and manual late-success resolution in README.
 - [ ] **D7 Operations:** record every deployment-gate result and any unrun check; do not expose the API if a pre-traffic gate fails.
@@ -248,6 +248,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - 2026-11-14: Japa integration cases pass for missed-webhook lookup, expiry with provider pending, provider outage, and webhook-vs-expiry race; webhook tests cover duplicate late success with one admin incident and no fulfilment.
 - 2026-11-14: expanded `tests/integration/checkout.spec.ts` to create payments for two non-admin users and assert owner-only payment index/detail visibility plus admin visibility of both payments in the index and both detail routes. `yarn workspace @executivepros/api test:integration` passes (20 tests).
 - 2026-11-14: isolated Compose `WEBHOOK_004` skipped delivery; API reconciliation recovered provider success with one fulfilment. A forged success signature returned `401` and left a real pending payment unchanged; the checkout was then cancelled through the provider and released its reservation.
+- 2026-11-14: isolated Compose recovery covers same-key delayed-provider replay (`202` without URL to `200` with the same payment after `PROVIDER_001` persistence), authenticated provider lookup, `WEBHOOK_001` concurrent duplicate delivery with one fulfilment/stock decrement, and `WEBHOOK_003` provider restart with post-restart `200` webhook acknowledgement. Queue and API stop/start and `WEBHOOK_004` reconciliation recovery were also verified; invalid HMAC returned `401` without changing payment state.
 - 2026-11-14: Added public versioned OpenAPI, a structural HTTP integration check, and a contract suite for provider status/init, queue job acceptance, HMAC/Bearer separation, checkout idempotency, and payment-status route absence.
 - 2026-11-14: API e2e now launches a real queue service process with its own temporary Workmatic database and an isolated Mailpit container. It verifies API outbox acceptance reaches Mailpit through authenticated `POST /jobs`; repeated submissions with one `notification_key` return distinct job IDs and two captured messages.
 - `yarn workspace @executivepros/api test`: **passed**, 27 tests across unit, integration, contract, and real-provider e2e suites, including real-provider skipped-webhook reconciliation.
