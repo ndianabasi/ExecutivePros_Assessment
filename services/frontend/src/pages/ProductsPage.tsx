@@ -120,7 +120,7 @@ function describeError(error: unknown) {
  */
 export function ProductsPage() {
   const { api, config, identity } = useSession()
-  const { connection, event, disconnect, reconnect } = usePaymentEvents()
+  const { connection, notifications, disconnect, reconnect } = usePaymentEvents()
   const [products, setProducts] = useState<Product[]>([])
   const [cart, setCart] = useState<Cart | null>(null)
   const [meta, setMeta] = useState<PageMeta>({ page: 1, page_size: 20, total: 0 })
@@ -524,16 +524,19 @@ export function ProductsPage() {
   )
 
   useEffect(() => {
-    if (
-      !event ||
-      !intent?.payment_id ||
-      event.payment_id !== intent.payment_id ||
-      !['payment_succeeded', 'payment_failed', 'payment_cancelled'].includes(event.type)
-    ) {
+    if (!intent?.payment_id) {
       return
     }
-    void refreshPayment(event.payment_id)
-  }, [event, intent?.payment_id, refreshPayment])
+    const hasTerminalActivity = notifications.some((activity) => {
+      return (
+        activity.payment_id === intent.payment_id &&
+        ['payment_succeeded', 'payment_failed', 'payment_cancelled'].includes(activity.type)
+      )
+    })
+    if (hasTerminalActivity) {
+      void refreshPayment(intent.payment_id)
+    }
+  }, [intent?.payment_id, notifications, refreshPayment])
 
   useEffect(() => {
     if (connection === 'connected' && intent?.payment_id) {

@@ -388,6 +388,7 @@ test('deployed Swagger Try it out calls the configured live API directly', async
   await page.goto(docsUrl)
   await expect(page.getByText('Live API specification loaded.')).toBeVisible()
   await page.locator('#seeded-user').selectOption({ index: 1 })
+  await expect(page.getByRole('button', { name: 'Select user' })).toBeEnabled()
   await page.getByRole('button', { name: 'Select user' }).click()
   await expect(page.locator('#identity')).toContainText('(user)')
 
@@ -397,6 +398,70 @@ test('deployed Swagger Try it out calls the configured live API directly', async
   await products.getByRole('button', { name: 'Execute' }).click()
   await expect(products.locator('.responses-wrapper')).toContainText('200')
   await expect(products.locator('.responses-wrapper')).toContainText('DEMO-NOTEBOOK')
+})
+
+test('deployed Swagger can create a cart, start keyed checkout, and read provider-confirmed status', async ({
+  page,
+  context,
+}) => {
+  test.skip(!liveApiOrigin, 'Set LIVE_API_ORIGIN to enable the isolated Compose contract smoke')
+  await page.goto(docsUrl)
+  await expect(page.getByText('Live API specification loaded.')).toBeVisible()
+  await page.locator('#seeded-user').selectOption({ index: 1 })
+  await expect(page.getByRole('button', { name: 'Select user' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Select user' }).click()
+  await expect(page.locator('#identity')).toContainText('(user)')
+  const token = await page.evaluate(() => {
+    return (JSON.parse(localStorage.getItem('api-docs.identity.v1') ?? 'null') as { token?: string } | null)
+      ?.token
+  })
+  expect(token).toBeTruthy()
+  await page.request.delete(`${apiOrigin}/v1/cart`, { headers: { Authorization: `Bearer ${token}` } })
+
+  const cart = page
+    .locator('#swagger-ui .opblock')
+    .filter({ hasText: 'Create an active cart and add an item' })
+  await cart.locator('.opblock-summary-control').click()
+  await cart.getByRole('button', { name: 'Try it out' }).click()
+  await cart.getByRole('button', { name: 'Execute' }).click()
+  await expect(cart.locator('.responses-wrapper')).toContainText('200')
+
+  await page.getByRole('button', { name: 'Generate new key' }).click()
+  const key = await page.locator('#checkout-key').inputValue()
+  expect(key).toMatch(/^[0-9a-f-]{36}$/i)
+  const checkout = page.locator('#swagger-ui .opblock').filter({
+    hasText: 'Create or replay an idempotent payment attempt',
+  })
+  await checkout.locator('.opblock-summary-control').click()
+  await checkout.getByRole('button', { name: 'Try it out' }).click()
+  await checkout.getByRole('textbox', { name: 'Idempotency-Key' }).fill(key)
+  await checkout.locator('textarea').fill('{}')
+  let checkoutResponse: import('@playwright/test').Response | undefined
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname === '/v1/cart/checkout') {
+      checkoutResponse = response
+    }
+  })
+  await checkout.getByRole('button', { name: 'Execute' }).click()
+  await expect.poll(() => checkoutResponse?.status()).toBe(201)
+  const checkoutBody = (await checkoutResponse!.json()) as { data: { id: number; payment_url: string } }
+  expect(new URL(checkoutBody.data.payment_url).origin).toBe(providerOrigin)
+
+  const providerPage = await context.newPage()
+  await providerPage.goto(checkoutBody.data.payment_url)
+  await providerPage.getByRole('button', { name: 'Pay successfully' }).click()
+  await expect(providerPage.getByRole('status')).toContainText('Payment success.')
+
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`${apiOrigin}/v1/payments/${checkoutBody.data.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok()) return response.status()
+      const body = (await response.json()) as { data: { status: string } }
+      return body.data.status
+    })
+    .toBe('success')
 })
 
 test('spec errors, origin mismatch and API outage keep operations disabled until a fresh valid retry', async ({

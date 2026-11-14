@@ -4,6 +4,11 @@ test('seeded user checks out through provider and sees API-confirmed status and 
   page,
   context,
 }) => {
+  await page.route('**/v1/cart/checkout', async (route) => {
+    const response = await route.fetch()
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    await route.fulfill({ response })
+  })
   await page.goto('/')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByLabel('User')).toBeVisible()
