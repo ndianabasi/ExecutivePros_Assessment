@@ -101,12 +101,12 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - [x] **Special-route controls:** login/logout/webhook/SSE remain visible but cannot execute through Swagger UI; bypassing the UI control is blocked by the request guard.
 - [x] **Picker-only identity:** manual Swagger Authorize is unavailable and cannot override the selected user.
 - [x] **Checkout helper:** random key generation/copy, persistence, uncertain same-key retry, new-key subsequent attempt, and switch-user clearing pass.
-- [ ] **Checkout request:** Swagger checkout includes the pasted `Idempotency-Key`, yields a provider URL, and does not imply the docs service verifies payment.
+- [x] **Checkout request:** Swagger checkout includes the pasted `Idempotency-Key`, yields a provider URL, and does not imply the docs service verifies payment.
 - [x] **Security:** no token in URL/snippets/logs, no external validator/CDN or arbitrary API origin, query config disabled, and restrictive CSP pass in a real browser.
 - [x] **Accessibility:** keyboard navigation, focus, screen-reader announcements, errors, and narrow viewport pass.
-- [ ] **Compose end-to-end:** select seeded user, create/read cart, checkout with key, open provider URL, and read API-confirmed status from real services.
-- [ ] Use isolated browser profiles and disposable API seed data; never mutate a developer's real demo database in automated tests.
-- [ ] Record each test command/result and every unrun check; do not call a static build deployment acceptance.
+- [x] **Compose end-to-end:** select seeded user, create/read cart, checkout with key, open provider URL, and read API-confirmed status from real services.
+- [x] Use isolated browser profiles and disposable API seed data; never mutate a developer's real demo database in automated tests.
+- [x] Record each test command/result and every unrun check; do not call a static build deployment acceptance.
 
 ## 8. Deployment gates — complete in order
 
@@ -117,11 +117,11 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - [x] **D2 Headers/tests:** verify CSP, no-store HTML/config, immutable versioned assets, valid generated config, and passing static/unit/integration gates.
 - [x] **D3 Container readiness:** start one docs container; verify internal `/health/live` and `/health/ready`, config file, static assets, and host-browser access.
 - [x] **D3 API connectivity:** verify live OpenAPI fetch and browser CORS; show API outage in the UI without treating static docs container as crashed.
-- [ ] **D4 Functional smoke:** open docs from frontend, select user/admin, run protected GET/cart mutation, paste a generated key, complete provider handoff, and inspect API payment.
+- [x] **D4 Functional smoke:** open docs from frontend, select user/admin, run protected GET/cart mutation, paste a generated key, complete provider handoff, and inspect API payment.
 - [x] **D5 Recovery smoke:** exercise API/spec outage and restoration, wrong server origin, expired token, and failed switch-user logout.
 - [x] **D5 Security smoke:** verify blocked special-route execution, query-string config override failure, and no external validator/CDN requests or token exposure.
 - [x] **D6 README:** document host-local URL, start/stop, browser API origin, picker/local-storage limitation, checkout-key workflow, Try it out effects/special-route limits, browser CORS, tests, logs, and rollback.
-- [ ] Record every deployment gate result and unrun check before accepting the service.
+- [x] Record every deployment gate result and unrun check before accepting the service.
 - [ ] On failed rollout, restore the prior static image with matching runtime config; perform no database migration or API payment-data rollback from this service.
 
 ## 9. Cross-service contract verification
@@ -138,4 +138,11 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - Built `executivepros-api-docs:0.1.0` from the pinned Alpine `3.24.4` runtime with Nginx `1.30.6-r0` and Node.js `24.22.3-r0`. Disposable container was healthy and ran as UID/GID `10004:10004`.
 - Passed 5 Playwright Chromium tests against the rebuilt disposable container, including identity persistence/switching, protected request handling, blocked special routes, checkout-key flow, user-list failure/retry and responsive control layout, live API Try it out, CORS/spec failure recovery, CSP, no-store headers, narrow viewport, and keyboard focus.
 - Passed API typecheck/lint, contract suite (1 test), and integration suite (20 tests), including the live generated OpenAPI examples, no-store response, browser CORS headers, and preflight behavior. `docker compose config --quiet` and `git diff --check` passed.
-- Still open: full Swagger cart mutation/checkout/provider handoff through docs, complete deployment acceptance, rollback rehearsal, and manual screen-reader review.
+- Still open: supported PATCH/DELETE execution coverage, complete deployment acceptance, rollback rehearsal, and manual screen-reader review.
+
+## Additional verification — 2026-11-14
+
+- `yarn workspace @executivepros/api-docs typecheck`, `lint`, `build`, `test:unit` (**7 passed**), and `test:integration` (**2 passed**) passed. Repo-wide `yarn lint` and `yarn format:check:services` passed.
+- `DOCS_TEST_URL=http://127.0.0.1:18581 API_ORIGIN_TEST=http://127.0.0.1:18583 PROVIDER_ORIGIN_TEST=http://127.0.0.1:18582 LIVE_API_ORIGIN=http://127.0.0.1:18583 yarn workspace @executivepros/api-docs test:e2e`: **passed**, 6 Playwright tests against the isolated `e2e-finalize` stack.
+- The browser gate exercises live spec loading/Try it out GET, seeded-user login, Swagger cart POST and checkout with the pasted key, real provider handoff/Pay, API-confirmed success, CSP/no-store configuration, outage recovery, and origin safety. It uses isolated browser contexts and disposable Compose data.
+- Supported PATCH/DELETE execution coverage, screen-reader review, and static-image rollback rehearsal remain unrun. Do not mark the docs deployment accepted until those named gates are completed.

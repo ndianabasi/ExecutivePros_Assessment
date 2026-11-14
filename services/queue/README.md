@@ -15,3 +15,13 @@ The root `.env.test.example` assigns high, distinct fixture ports. Copy it to ig
 Logs correlate request ID, Workmatic job ID, notification-key hash, payment reference, attempt, outcome, and error class. Message bodies, recipients, and service secrets are excluded. Workmatic keeps completed and exhausted jobs in `jobs.db`; no automatic cleanup, dashboard, replay route, or dead-job alert is configured.
 
 Back up `jobs.db` using the deployment's SQLite-safe backup flow. A database reset is allowed only for a disposable demo volume. Do not use production `down` migrations or remove persistent queue data as rollback.
+
+## Operations
+
+Run `yarn status` to inspect all six services, `yarn stop` to stop the stack while preserving volumes, and `yarn deploy:local` to resume it. Use the root `yarn backup` and `yarn restore` workflows for consistent SQLite backups; restore only into a new, explicitly disposable project. Inspect queue logs with the Compose project from `.env`:
+
+```sh
+docker compose --project-name executivepros_assessment --env-file .env --file compose.yaml logs --tail=100 queue
+```
+
+The queue has no dashboard or manual replay route. Readiness means the queue database and worker are available; an SMTP failure is logged and retried independently. Inspect Mailpit for capture rather than treating HTTP `202` or Workmatic `done` as proof of email delivery. The root README documents the host-local Mailpit URL, private SMTP endpoint, backup/restore, and disposable-volume reset.

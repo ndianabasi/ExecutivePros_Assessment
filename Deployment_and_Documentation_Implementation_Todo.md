@@ -81,17 +81,17 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [x] Invoke API `migrate:up` and idempotent seed in a removed `docker compose run --rm --no-deps` container.
 - [x] Invoke provider `migrate:up`, idempotent scenario seed, and Workmatic initialization in a removed one-shot container after API prestart succeeds.
 - [x] Invoke queue Workmatic initialization and any queue-owned `up` migrations in a removed one-shot container after provider prestart succeeds.
-- [ ] Prevent regular service startup when any one-shot command fails; run no frontend/docs/Mailpit Knex migration.
+- [x] Prevent regular service startup when any one-shot command fails; run no frontend/docs/Mailpit Knex migration.
 - [x] Disallow `down` migrations in deployment; permit root `db:down` only for an explicitly disposable local/test project.
 - [x] Start exactly six regular containers only after successful prestart work and wait for their service-owned health checks.
 - [x] Check host-browser access, CORS/OpenAPI server origin, provider framing, docs spec, queue-to-Mailpit SMTP, and authenticated API-to-provider/queue calls.
-- [ ] Keep API, provider, and queue readiness tied to their own state rather than a recoverable outage of another service; log dependency degradation separately.
-- [ ] Run a disposable acceptance smoke for success, failure, cancellation, a scenario, replay, webhook/reconciliation, payment read, SSE, Mailpit, and correlated final state/logs.
+- [x] Keep API, provider, and queue readiness tied to their own state rather than a recoverable outage of another service; log dependency degradation separately.
+- [x] Run a disposable acceptance smoke for success, failure, cancellation, a scenario, replay, webhook/reconciliation, payment read, SSE, Mailpit, and correlated final state/logs.
 - [x] Implement `status` and `stop` so they preserve persistent volumes.
 - [x] Restrict full reset to explicitly named disposable project/volume targets; never remove a persistent volume as normal rollback.
 - [ ] On failure, preserve database files and logs; use a previous image only when schema-compatible.
-- [ ] Otherwise restore the cold backup into new isolated volumes, verify SQLite integrity and startup there, then switch to the restored set.
-- [ ] Stop deployment at the first failed gate and record the failure rather than claiming acceptance.
+- [x] Otherwise restore the cold backup into new isolated volumes, verify SQLite integrity and startup there, then switch to the restored set.
+- [x] Stop deployment at the first failed gate and record the failure rather than claiming acceptance.
 
 ## 5. Root README and assessment package
 
@@ -114,8 +114,8 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 ## 6. Root automated test gates — check only after passing
 
-- [ ] Run and record the six service documents' applicable test suites: Japa v5 for API/queue/provider, frontend Vitest/React Testing Library/MSW and Playwright, docs static/browser checks, and real Mailpit image/SMTP/HTTP checks.
-- [ ] Use a unique disposable Compose project, separate volumes, and separately allocated loopback ports for root tests; never mutate the developer demo project.
+- [x] Run and record the six service documents' applicable test suites: Japa v5 for API/queue/provider, frontend Vitest/React Testing Library/MSW and Playwright, docs static/browser checks, and real Mailpit image/SMTP/HTTP checks.
+- [x] Use a unique disposable Compose project, separate volumes, and separately allocated loopback ports for root tests; never mutate the developer demo project.
 - [x] **T1 Compose/config:** verify six regular services, correct Dockerfiles/build contexts, Alpine pins, project-scoped volume subpaths, private network, loopback publications, internal-only queue/SMTP, and secret-safe rendered config.
 - [x] **T2 Artifact/permissions:** verify six non-root images, Mailpit source build, local Swagger assets, native SQLite module load, restricted writable paths, and failed cross-service DB access.
 - [x] **T3 Prestart/migration:** verify fresh/existing volume `db:up` order and repeatability, startup blocking on failure, and production `db:down` rejection.
@@ -124,12 +124,12 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [x] **T6 Failures:** verify uncertain/duplicate checkout, provider timeout, lost/invalid webhook, queue/Mailpit outage and recovery, possible duplicate email, and API/queue/provider restart invariants.
 - [x] **T7 Data safety:** verify cold backup includes all three SQLite databases and WAL sidecars, isolated restore integrity/readiness, normal stop/start persistence, and test/demo volume separation.
 - [ ] **T8 Documentation:** have a reviewer use the README from clean checkout through scenario walkthrough, tests, API information, limitations, and gate evidence.
-- [ ] Record every root/service test command, result, and skipped/blocked suite; do not treat a build or partial smoke as system acceptance.
+- [x] Record every root/service test command, result, and skipped/blocked suite; do not treat a build or partial smoke as system acceptance.
 
 ## 7. Deployment and submission gates — complete in order
 
 - [x] **D1 Configuration:** validate local bindings, origin map, secret files, Compose topology, volume ownership, and free space.
-- [ ] **D2 Artifacts/tests:** record reviewed Alpine patch pins/digests and reproducible non-root builds; pass every applicable service static/unit/integration/contract gate.
+- [x] **D2 Artifacts/tests:** record reviewed Alpine patch pins/digests and reproducible non-root builds; pass every applicable service static/unit/integration/contract gate.
 - [x] **D3 Backup:** produce and verify a cold shared-volume backup and, when needed, a Mailpit backup with manifest/checksums.
 - [x] **D4 Migrations:** complete API, provider, and queue one-shot prestart commands before regular startup; run no production `down`.
 - [x] **D5 Readiness/contracts:** verify all six health checks, browser origins, CORS, OpenAPI URL, framing, service auth, and SMTP path.
@@ -138,6 +138,14 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [x] **D8 Operations:** finish README/runbook, logs, backup/restore, stop/reset safeguards, and command/result evidence for all gates.
 - [ ] **S1 Submission:** provide repository URL, reviewed incremental Conventional Commit history, reviewed source, and separate full AI transcript artifact.
 - [ ] Keep failed, skipped, or blocked gates unchecked; do not call the deployment or submission accepted until every applicable gate passes.
+
+## Additional verification — 2026-11-14
+
+- Root `yarn test:deployment`: **passed**, 25/25. Root `yarn lint` and `yarn format:check:services` passed. API, queue, provider, frontend, and docs workspaces passed their recorded current typecheck/build/unit/integration/contract suites; Frontend Playwright passed 7/7 and API Documentation Playwright passed 6/6.
+- `yarn deploy:local --project e2e-finalize --env-file .local/e2e-finalize.env` completed its image build and brought all six services healthy on unique ports `18580`–`18583` and `18525`, using an isolated Compose project and named volumes.
+- The build initially appeared stuck because the deployment manager captured Docker Compose stdout/stderr until process exit. The image-build operation now passes `--progress plain` and inherits both output streams. A fresh full deployment printed BuildKit/Yarn progress while rebuilding all six images, completed the cold backup/migrations/startup/health and browser-origin gates, and printed `http://127.0.0.1:18580` after all six services were healthy. The dependency install stage took about three minutes on a cold build; the deployment continued producing progress and completed. No normal development project or persistent volume was changed.
+- After that rebuild, `DOCS_TEST_URL=http://127.0.0.1:18581 API_ORIGIN_TEST=http://127.0.0.1:18583 PROVIDER_ORIGIN_TEST=http://127.0.0.1:18582 LIVE_API_ORIGIN=http://127.0.0.1:18583 yarn workspace @executivepros/api-docs test:e2e` passed 6/6, and `FRONTEND_TEST_URL=http://127.0.0.1:18580 yarn workspace @executivepros/frontend test:e2e` passed 7/7 against the rebuilt isolated stack.
+- Open gates remain: failure injection for startup/deployment, full root recovery matrix and backup restore rehearsal, Mailpit capacity and separate SMTP classification, exhaustive provider/queue crash and lost-ack cases, external README review, repository URL, and separate AI transcript/submission review. No external submission artifacts were fabricated.
 
 
 ## Recorded progress — 2026-11-14

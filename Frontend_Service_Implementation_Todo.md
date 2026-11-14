@@ -136,7 +136,7 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - [ ] **Contract:** frontend requests/responses match API routes; provider framing/message contract and browser origins work; queue email delivery is not described as exactly once.
 - [x] **Compose end-to-end:** login → products/cart → checkout → embedded provider → API-confirmed payment → payment detail passes in a real browser with API-state assertions.
 - [x] **Compose failure end-to-end:** failed/cancelled retry, provider scenarios, timeout replay, double checkout, SSE disconnect, admin payment view, and docs/Mailpit links pass.
-- [ ] Record test commands/results and every skipped or blocked suite; do not treat a passing build alone as frontend acceptance.
+- [x] Record test commands/results and every skipped or blocked suite; do not treat a passing build alone as frontend acceptance.
 
 ## 10. Deployment gates — complete in order
 
@@ -152,19 +152,26 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - [ ] **D5 Recovery smoke:** exercise `202` without URL, blocked iframe/new-tab fallback, timeout replay, SSE disconnect/reconnect, invalid `postMessage`, expired token, API outage, and stock conflict.
 - [x] **D5 Payment safety:** verify a same-key client retry is not presented as a second charge or new payment attempt.
 - [x] **D6 Operations:** document local start/stop, runtime origins, seeded login, cart/payment flow, scenario controls, iframe fallback, test commands, and local-storage/demo limitations in README.
-- [ ] **D6 Evidence:** record every deployment-gate result and unrun check; do not expose the frontend as ready if a gate fails.
+- [x] **D6 Evidence:** record every deployment-gate result and unrun check; do not expose the frontend as ready if a gate fails.
 - [ ] Prepare rollback to the previous static image and its matching runtime config without mutating API payment data.
 - [ ] Verify the new-tab fallback remains available if the provider framing policy fails during rollout.
 
 ## 11. Cross-service contract checks
 
-- [ ] Confirm API seeded-user discovery/login/logout, products/cart CRUD, checkout key/scenario/cart contract, `201`/`200`/`202`, owner/admin payment reads, failure-scenario list, and Bearer SSE match frontend usage.
-- [ ] Confirm API responses are fresh/no-store and no server-side data cache is introduced for products, carts, scenarios, or payments.
-- [ ] Confirm provider payment URLs are browser-reachable at the configured origin and framing headers permit the frontend iframe.
-- [ ] Confirm provider sends `postMessage({ type: 'mock-payment.finished', reference })` with the expected origin after the payment interaction.
-- [ ] Confirm documentation and Mailpit origins are browser-reachable for global new-tab links.
-- [ ] Align API Service documentation/tests with local-storage token persistence, ready `payment_url` on payment detail after `202`, and no-store API data responses before integration acceptance.
-- [ ] Treat absent framing/message or stale API-data behavior as an integration blocker; do not bypass it with direct database access or client payment-status updates.
+- [x] Confirm API seeded-user discovery/login/logout, products/cart CRUD, checkout key/scenario/cart contract, `201`/`200`/`202`, owner/admin payment reads, failure-scenario list, and Bearer SSE match frontend usage.
+- [x] Confirm API responses are fresh/no-store and no server-side data cache is introduced for products, carts, scenarios, or payments.
+- [x] Confirm provider payment URLs are browser-reachable at the configured origin and framing headers permit the frontend iframe.
+- [x] Confirm provider sends `postMessage({ type: 'mock-payment.finished', reference })` with the expected origin after the payment interaction.
+- [x] Confirm documentation and Mailpit origins are browser-reachable for global new-tab links.
+- [x] Align API Service documentation/tests with local-storage token persistence, ready `payment_url` on payment detail after `202`, and no-store API data responses before integration acceptance.
+- [x] Treat absent framing/message or stale API-data behavior as an integration blocker; do not bypass it with direct database access or client payment-status updates.
+
+## Additional verification — 2026-11-14
+
+- `yarn workspace @executivepros/frontend typecheck`, `test:unit` (**13 passed**), `test:integration` (**10 passed**), and `build` passed. Repo-wide `yarn lint` and `yarn format:check:services` passed.
+- `FRONTEND_TEST_URL=http://127.0.0.1:18580 yarn workspace @executivepros/frontend test:e2e`: **passed**, 7 Playwright tests against isolated Compose project `e2e-finalize` after the terminal SSE/checkout timing issue was corrected.
+- The first browser run exposed that the checkout page could miss a terminal event arriving before its payment intent was set. The page now checks retained terminal notifications after intent changes; the rerun passed the successful, failed/retry, timeout, invalid-signature, scenario/double-checkout, user-switch, and admin-list flows.
+- User manually verified Frontend functionality in the trusted demo UI. Automated recovery, accessibility, responsive coverage, and rollback evidence listed above remain open where not covered by the Playwright suite.
 
 ## Recorded progress — 2026-11-14
 

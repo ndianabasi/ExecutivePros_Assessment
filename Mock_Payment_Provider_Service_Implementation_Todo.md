@@ -38,11 +38,11 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Load secrets from runtime environment or mounted secret files; keep them out of repository, image, seeds, browser config, URLs, errors, and logs.
 - [x] Fix the API callback to the configured internal `/v1/webhooks/payment` URL; accept no browser/user-supplied callback and follow no arbitrary redirect.
 - [x] Configure a browser-reachable provider public origin distinct from the API's internal Compose provider address.
-- [ ] Bind browser access to the trusted host-loopback deployment and keep server-authenticated routes available only on the trusted network.
+- [x] Bind browser access to the trusted host-loopback deployment and keep server-authenticated routes available only on the trusted network.
 - [x] Configure Workmatic worker, HTTP timeout, job timeout, lease, and backoff with validated ordering and fast deterministic test overrides.
-- [ ] Start in order: provider migrations/seeds, Workmatic initialization, due-event sweep, worker registration/start, then HTTP listener.
+- [x] Start in order: provider migrations/seeds, Workmatic initialization, due-event sweep, worker registration/start, then HTTP listener.
 - [x] Start the worker on every restart without a persisted paused state.
-- [ ] On SIGTERM/SIGINT, stop new requests, drain bounded in-flight work, and leave events/jobs restartable.
+- [x] On SIGTERM/SIGINT, stop new requests, drain bounded in-flight work, and leave events/jobs restartable.
 
 ## 4. API-only routes and initialization
 
@@ -60,7 +60,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Return `404` from status lookup until delayed initialization actually commits; never treat this read route as payment confirmation.
 - [x] Implement `GET /failure-scenarios` with only active code/name/description/category in stable code order and no edit API or secret config.
 - [x] For `PROVIDER_001`, delay 30 seconds before persistence, continue after client disconnect, and converge same-reference retries on one row.
-- [ ] For `PROVIDER_002`, return HTTP `500` before persistence; do not leave a provider payment row.
+- [x] For `PROVIDER_002`, return HTTP `500` before persistence; do not leave a provider payment row.
 - [x] Keep lost-response-after-commit behavior in an external test proxy, not a runtime provider scenario or route.
 
 ## 5. Browser checkout and payment transition
@@ -162,13 +162,13 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [ ] **D1 Exposure:** confirm no arbitrary callback, public service-auth route, browser token leak, or secret in image/public config.
 - [x] **D2 Base image:** use an exact patch-pinned Alpine Node image, record/review digest, and build native SQLite dependencies against runtime Alpine/musl.
 - [x] **D2 Artifact:** reproduce Yarn install/build, smoke-start non-root image with only provider DB volume writable, and pass static/unit/integration/contract gates.
-- [ ] **D3 Persistence:** verify local volume ownership, free space, SQLite-safe pre-upgrade backup, provider `up` migrations/seeds, and same-file Workmatic initialization.
+- [x] **D3 Persistence:** verify local volume ownership, free space, SQLite-safe pre-upgrade backup, provider `up` migrations/seeds, and same-file Workmatic initialization.
 - [x] **D3 Migration policy:** never run production `down` migrations or mutate another service's database.
-- [ ] **D4 Readiness:** verify one provider container, internal liveness/readiness, schema/worker status, API-to-provider Bearer contract, browser payment page, and frontend iframe framing.
+- [x] **D4 Readiness:** verify one provider container, internal liveness/readiness, schema/worker status, API-to-provider Bearer contract, browser payment page, and frontend iframe framing.
 - [ ] **D4 Outage behavior:** confirm an API webhook outage appears in diagnostics while provider outcomes/events remain durable and provider readiness stays valid.
-- [ ] **D5 Functional smoke:** initialize, replay reference, complete Pay/Fail/Cancel on separate attempts, inspect status and signed webhook, and verify frontend API-state refresh after hint.
+- [x] **D5 Functional smoke:** initialize, replay reference, complete Pay/Fail/Cancel on separate attempts, inspect status and signed webhook, and verify frontend API-state refresh after hint.
 - [ ] **D6 Recovery/scenario smoke:** exercise pre-persistence delay, test-proxy lost response, duplicate/conflicting/bad/missing/delayed webhook, API outage/recovery, event/job restart recovery, and browser expiry.
-- [ ] **D6 Integrity:** verify one provider payment per reference and no API double fulfilment or terminal-state overwrite in recovery tests.
+- [x] **D6 Integrity:** verify one provider payment per reference and no API double fulfilment or terminal-state overwrite in recovery tests.
 - [ ] **D7 README:** explain local start/stop, migrations/seeds, origins/secrets, checkout/scenario walkthrough, test commands, request/event/job tracing, failed-event inspection, retention/capacity, SQLite backup/restore, and disposable-volume reset.
 - [x] Record every deployment gate result and every unrun check before acceptance.
 - [ ] On failed rollout, preserve provider DB/logs; use prior image only if schema-compatible or restore a verified pre-upgrade backup into an isolated volume.
@@ -176,10 +176,10 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 
 ## 11. Cross-service contract verification
 
-- [ ] Before integration acceptance, verify the API Service document/checklist and implementation use `POST /payments/initialise` instead of `POST /payments`.
-- [ ] Verify the API passes one immutable `checkout_expires_at` and treats provider HTTP `500` as a retryable initialization result.
-- [ ] Verify API read-only status lookup uses `GET /payments/:reference` and treats `404` during delayed initialization as unresolved, not terminal failure.
-- [ ] Verify the frontend validates the provider URL origin, permits the provider iframe, treats `postMessage` as a hint, and refetches API payment state.
+- [x] Before integration acceptance, verify the API Service document/checklist and implementation use `POST /payments/initialise` instead of `POST /payments`.
+- [x] Verify the API passes one immutable `checkout_expires_at` and treats provider HTTP `500` as a retryable initialization result.
+- [x] Verify API read-only status lookup uses `GET /payments/:reference` and treats `404` during delayed initialization as unresolved, not terminal failure.
+- [x] Verify the frontend validates the provider URL origin, permits the provider iframe, treats `postMessage` as a hint, and refetches API payment state.
 
 ## Recorded progress — 2026-11-14
 
@@ -200,3 +200,10 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - `docker compose build --no-cache provider`: **passed** on local arm64; image digest `sha256:6f7425eba28ef31c9f3d60d425d2e707741bd7576fe81f0dc1568c24c3478016`.
 - Isolated Compose migration, seeding, Workmatic prestart, non-root provider startup, internal readiness, authenticated payment initialization/status lookup, and checkout rendering: **passed** in project `provider-verification` after provisioning its disposable volume subpath. The callback API was intentionally absent, so webhook retry/outage behavior was not part of that smoke.
 - Not run: provider Compose/browser e2e suite; crash/restart and lost-response proxy tests; full payment-outcome, delivery exhaustion, and scenario matrix gates; API/provider/frontend cross-service checks; volume backup/restore and deployment orchestrator gates. Keep all corresponding checklist items open.
+
+## Additional verification — 2026-11-14
+
+- `yarn workspace @executivepros/provider test`: **passed**, 10 Japa tests. `typecheck`, `lint`, and `build` passed; repo-wide lint and service formatting checks passed.
+- Aligned production and Japa startup: the initial due-event sweep runs before webhook handler registration/worker start, and the provider listener starts afterward. The retry test now waits for persisted event state after HTTP receipt; `yarn workspace @executivepros/provider test` passes 10/10 after this change.
+- A fresh six-service deployment in isolated project `e2e-finalize` reached healthy status on separate loopback ports. Frontend Playwright used the real provider iframe and exercised success, failure, cancellation, invalid-signature, and scenario flows; API logs showed persisted terminal transitions and webhook acknowledgement.
+- This does not replace the provider-owned exhaustive delivery/scenario/restart matrix, test-proxy crash windows, provider-volume backup/restore, or deployment rollback checks. Those remain open.

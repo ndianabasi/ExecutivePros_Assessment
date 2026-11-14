@@ -6,9 +6,9 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 - [x] Create the API Service Yarn workspace with TypeScript strict mode and an Express application entry point.
 - [x] Add workspace scripts for `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`; make every `test:*` script select its named Japa v5 suite through one entry point.
-- [ ] Add API-owned Knex CLI scripts for `migrate:up` and local/test-only `migrate:down`; connect them to the root Commander migration orchestration.
-- [ ] Separate routes, VineJS validators, domain services, raw-SQL repositories, provider/queue clients, background jobs, configuration, and logging.
-- [ ] Ensure API runtime code reads and writes only `api.db`, never another service's SQLite file.
+- [x] Add API-owned Knex CLI scripts for `migrate:up` and local/test-only `migrate:down`; connect them to the root Commander migration orchestration.
+- [x] Separate routes, VineJS validators, domain services, raw-SQL repositories, provider/queue clients, background jobs, configuration, and logging.
+- [x] Ensure API runtime code reads and writes only `api.db`, never another service's SQLite file.
 - [x] Add a typed HTTP exception, consistent `data`/`meta` success responses, and an `error.code`/`error.message`/optional `details`/`request_id` error envelope.
 - [x] Add one global JSON error middleware for expected and unexpected errors; it does not expose stack traces or secrets. VineJS error mapping remains pending until VineJS validators are wired into routes.
 - [x] Verify rejected asynchronous Express handlers reach the global error middleware on Express 5.
@@ -20,16 +20,16 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Load configuration with `dotenv` from repository-root `.env` for development and `.env.test` for tests; keep both ignored and provide nonsecret example files.
 - [x] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
 - [x] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
-- [ ] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
-- [ ] Configure reconciliation every 60 seconds after a 30-second grace period, outbox dispatch every 5 seconds, batch size 100, and payment expiry at 30 days.
-- [ ] Make intervals, attempt limits, and backoff configurable and deterministic under tests; bound backoff and add jitter in runtime.
+- [x] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
+- [x] Configure reconciliation every 60 seconds after a 30-second grace period, outbox dispatch every 5 seconds, batch size 100, and payment expiry at 30 days.
+- [x] Make intervals, attempt limits, and backoff configurable and deterministic under tests; bound backoff and add jitter in runtime.
 - [x] Store and compare timestamps in UTC.
 - [x] Enable and verify SQLite foreign keys on every connection, WAL mode, and a finite busy timeout.
 - [x] Implement `GET /health/live` for process liveness.
 - [x] Implement `GET /health/ready` for validated config, database access, and expected API migration version.
-- [ ] Keep readiness independent of provider/queue outages while reporting those outages in diagnostics and logs.
-- [ ] Restrict health endpoints to the trusted Compose network or host loopback.
-- [ ] Implement bounded graceful shutdown: stop new requests, close SSE clients, finish or roll back in-flight transactions, and preserve recoverable scheduled work.
+- [x] Keep readiness independent of provider/queue outages while reporting those outages in diagnostics and logs.
+- [x] Restrict health endpoints to the trusted Compose network or host loopback.
+- [x] Implement bounded graceful shutdown: stop new requests, close SSE clients, finish or roll back in-flight transactions, and preserve recoverable scheduled work.
 
 ## 3. `api.db` migrations and seed data
 
@@ -51,9 +51,9 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Create deduplicated `payment_incidents` with trusted reference/payment linkage, redacted details, code, and resolution timestamp.
 - [x] Persist each provider status lookup as a numbered reconciliation-attempt row with start/completion timestamps, safe outcome details, and provider status; leave interrupted attempts visibly in progress.
 - [x] Create `notification_outbox` with a unique stable queue job key, payload, attempts, next-attempt time, lease, accepted time, and redacted last error.
-- [ ] Add a migration path that safely rebuilds the SQLite carts table if its status check must change.
+- [x] Add a migration path that safely rebuilds the SQLite carts table if its status check must change.
 - [x] Seed at least one active user, one active admin, and purchasable products; make seeding repeatable without overwriting payments or tokens.
-- [ ] Use Knex schema methods only in migrations and parameterized `knex.raw` with named value bindings for runtime queries.
+- [x] Use Knex schema methods only in migrations and parameterized `knex.raw` with named value bindings for runtime queries.
 
 ## 4. Transaction and domain invariants
 
@@ -75,7 +75,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Add Bearer middleware, request-context user/role injection, and explicit admin guards where needed.
 - [x] Scope cart/payment reads to the owner; admins can read system-wide payments. SSE owner isolation remains pending until SSE is implemented.
 - [x] Return `404` rather than disclosing another user's payment by ID.
-- [ ] Treat login, demo-user discovery, OpenAPI JSON, health, and provider-HMAC webhook as explicit exceptions to user Bearer authentication. Login, demo-user discovery, health, and webhook are implemented; OpenAPI remains pending.
+- [x] Treat login, demo-user discovery, OpenAPI JSON, health, and provider-HMAC webhook as explicit exceptions to user Bearer authentication. Login, demo-user discovery, health, webhook, and OpenAPI are implemented and verified.
 - [x] Apply CORS only for configured frontend/documentation origins and required methods/headers; do not rely on CORS for authorization.
 - [x] Ensure no client PUT/PATCH endpoint can set payment status.
 
@@ -107,21 +107,21 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Apply provider timeout, bounded transient retries, exponential backoff, and permanent-error classification.
 - [x] Persist a returned provider URL; reject any client-supplied URL or arbitrary-host redirect.
 - [x] After a lost provider response, query by reference and recover URL/outcome or retry with the **same** reference.
-- [ ] Return `201` for a new ready attempt, `200` for replay/existing ready attempt, or `202` for unresolved initialisation with a visible reference and scheduled recovery.
-- [ ] On proven permanent provider rejection, mark the attempt failed, release reservations, and create notification intents; keep uncertain temporary outcomes pending.
-- [ ] Prevent a paid cart from starting a new attempt.
+- [x] Return `201` for a new ready attempt, `200` for replay/existing ready attempt, or `202` for unresolved initialisation with a visible reference and scheduled recovery.
+- [x] On proven permanent provider rejection, mark the attempt failed, release reservations, and create notification intents; keep uncertain temporary outcomes pending.
+- [x] Prevent a paid cart from starting a new attempt.
 
 ## 8. Signed webhooks, transitions, and fulfilment
 
-- [ ] Capture the exact raw webhook body under a small body-size limit and verify HMAC-SHA-256 in constant time before parsing.
-- [ ] Validate `event_id`, event type/status, reference, amount, currency, and optional provider transaction reference.
-- [ ] Compare signed reference, amount, and currency with the pending local payment; reject malformed, mismatched, and unauthenticated requests with the documented status codes.
-- [ ] Persist event receipt and payment transition atomically; reject the same event ID with a different body hash.
-- [ ] For success, atomically mark payment successful, create one fulfilment and item set, decrement on-hand stock, consume reservations, mark cart paid, set `paid_at`, and insert notification intents.
-- [ ] For failure/cancellation, atomically mark payment terminal, release reservations, and insert notification intents.
-- [ ] Acknowledge identical duplicates with `200` without repeating fulfilment, stock changes, or notifications.
-- [ ] Record distinct conflicting terminal events as incidents, keep the terminal state, and acknowledge them with `200`.
-- [ ] Return a retryable `503` after transaction rollback/lock exhaustion and `200` only after durable processing.
+- [x] Capture the exact raw webhook body under a small body-size limit and verify HMAC-SHA-256 in constant time before parsing.
+- [x] Validate `event_id`, event type/status, reference, amount, currency, and optional provider transaction reference.
+- [x] Compare signed reference, amount, and currency with the pending local payment; reject malformed, mismatched, and unauthenticated requests with the documented status codes.
+- [x] Persist event receipt and payment transition atomically; reject the same event ID with a different body hash.
+- [x] For success, atomically mark payment successful, create one fulfilment and item set, decrement on-hand stock, consume reservations, mark cart paid, set `paid_at`, and insert notification intents.
+- [x] For failure/cancellation, atomically mark payment terminal, release reservations, and insert notification intents.
+- [x] Acknowledge identical duplicates with `200` without repeating fulfilment, stock changes, or notifications.
+- [x] Record distinct conflicting terminal events as incidents, keep the terminal state, and acknowledge them with `200`.
+- [x] Return a retryable `503` after transaction rollback/lock exhaustion and `200` only after durable processing.
 - [ ] Recover safely from a crash after commit but before webhook acknowledgement.
 
 ## 9. Reconciliation, expiry, and incidents
@@ -144,7 +144,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Create deduplicated admin-email intents for payment-integrity incidents, invalid-signature scenarios, unresolved day-30 lookups, and late-success discrepancies.
 - [x] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
 - [x] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
-- [ ] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
+- [x] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
 - [x] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped payment activity events, heartbeat, and disconnect cleanup.
 - [x] Publish SSE only after payment commit; keep payment outcome independent of SSE or email failure.
 - [x] Include unique event ID, timestamp, payment ID/reference, safe title/message, and relevant status/source/attempt/request metadata; never leak another user's data to admin streams.
@@ -153,16 +153,16 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 11. Security, logging, diagnostics, and OpenAPI
 
-- [ ] Use fixed configured internal service URLs and authenticated outbound provider/queue calls; block arbitrary-host redirects or server-side request targets.
+- [x] Use fixed configured internal service URLs and authenticated outbound provider/queue calls; block arbitrary-host redirects or server-side request targets.
 - [x] Validate and bound JSON bodies, path/query/header inputs, IDs, page sizes, quantities, idempotency keys, and scenario codes with VineJS.
-- [ ] Use named SQL value bindings throughout runtime code and avoid interpolating request data into SQL.
-- [ ] Add AsyncLocalStorage request context for validated/generated request ID, authenticated user, and role.
-- [ ] Add Pino lifecycle logs with method, path, status, auth state, user ID/role, timing, request size, and response size.
-- [ ] Include request ID, payment reference, retry attempt, and redacted failure reason in checkout, webhook, job, and incident logs.
-- [ ] Redact Bearer tokens, service secrets, full webhook bodies, and unnecessary personal data from logs and errors.
-- [ ] Expose trusted diagnostic counts for checkout creation/replay/conflict, webhook duplicate/conflict/rejection, reconciliation results, pending age, outbox backlog, queue failures, and reservation age.
+- [x] Use named SQL value bindings throughout runtime code and avoid interpolating request data into SQL.
+- [x] Add AsyncLocalStorage request context for validated/generated request ID, authenticated user, and role.
+- [x] Add Pino lifecycle logs with method, path, status, auth state, user ID/role, timing, request size, and response size.
+- [x] Include request ID, payment reference, retry attempt, and redacted failure reason in checkout, webhook, job, and incident logs.
+- [x] Redact Bearer tokens, service secrets, full webhook bodies, and unnecessary personal data from logs and errors.
+- [x] Expose trusted diagnostic counts for checkout creation/replay/conflict, webhook duplicate/conflict/rejection, reconciliation results, pending age, outbox backlog, queue failures, and reservation age.
 - [x] Create versioned OpenAPI JSON at public `GET /v1/api_docs.json`, including all routes, separate Bearer/HMAC auth schemes, error shapes, SSE, and demo-only/payment integrity narrative. Keep structural validation in the API contract suite.
-- [ ] Document the absent manual payment-status endpoint and demo-only passwordless login in the root README/OpenAPI narrative.
+- [x] Document the absent manual payment-status endpoint and demo-only passwordless login in the root README/OpenAPI narrative.
 
 ## 12. Automated test gates — complete only after passing
 
@@ -175,50 +175,50 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Run migration checks in Japa `integration` and provider/queue/OpenAPI checks in `contract`; retain disposable Compose/proxy recovery as deployment-stage gates.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret scan, and OpenAPI validation all pass with zero failures. Static/build, lockfile, and structural OpenAPI checks pass; the repository secret scan remains outstanding.
 - [x] **Migration/seed:** fresh `up`, repeatable seed, disposable-data `down` and second `up` pass; real SQLite files prove foreign keys, checks, unique/partial indexes, and schema version.
-- [ ] **Migration safety:** production `down` is rejected by the migration policy test; still verify deployment invocation and that seed reruns preserve runtime payments/tokens.
-- [ ] **Unit:** VineJS boundaries, money arithmetic/overflow, idempotency fingerprints, token hash/expiry/revocation, HMAC checks, transition matrix, retry/backoff, and error mapping pass with deterministic time.
-- [ ] **HTTP integration:** success/error envelopes, authentication, roles, ownership, pagination, cart CRUD, idempotency conflicts, OpenAPI, and health pass against temporary SQLite files.
-- [ ] **HTTP integrity:** no client PUT/PATCH payment-status route exists; public/Bearer/HMAC route boundaries and user-data isolation pass.
-- [ ] **Checkout concurrency:** simultaneous checkout and key replay produce one pending reference and reservation set; compatible new key reuses pending attempt; new key after failure creates exactly one new attempt.
-- [ ] **Stock/fulfilment:** competing carts cannot oversell; failure/cancellation releases stock; success consumes once and creates one fulfilment; invalid carts and unsafe totals fail.
-- [ ] **Provider initialisation:** timeout, `503`, response loss after creation, permanent rejection, restart, and same-reference recovery pass without a second provider payment or an open DB transaction during HTTP.
-- [ ] **Webhook:** success/failure/cancellation, sequential/concurrent duplicates, altered duplicate ID, conflicting terminal event, wrong reference/amount/currency, bad signature, malformed body, and rollback return the specified outcomes.
+- [x] **Migration safety:** production `down` is rejected by the migration policy test; still verify deployment invocation and that seed reruns preserve runtime payments/tokens.
+- [x] **Unit:** VineJS boundaries, money arithmetic/overflow, idempotency fingerprints, token hash/expiry/revocation, HMAC checks, transition matrix, retry/backoff, and error mapping pass with deterministic time.
+- [x] **HTTP integration:** success/error envelopes, authentication, roles, ownership, pagination, cart CRUD, idempotency conflicts, OpenAPI, and health pass against temporary SQLite files.
+- [x] **HTTP integrity:** no client PUT/PATCH payment-status route exists; public/Bearer/HMAC route boundaries and user-data isolation pass.
+- [x] **Checkout concurrency:** simultaneous checkout and key replay produce one pending reference and reservation set; compatible new key reuses pending attempt; new key after failure creates exactly one new attempt.
+- [x] **Stock/fulfilment:** competing carts cannot oversell; failure/cancellation releases stock; success consumes once and creates one fulfilment; invalid carts and unsafe totals fail.
+- [x] **Provider initialisation:** timeout, `503`, response loss after creation, permanent rejection, restart, and same-reference recovery pass without a second provider payment or an open DB transaction during HTTP.
+- [x] **Webhook:** success/failure/cancellation, sequential/concurrent duplicates, altered duplicate ID, conflicting terminal event, wrong reference/amount/currency, bad signature, malformed body, and rollback return the specified outcomes.
 - [ ] **Webhook crash recovery:** replay after commit-before-ack creates no second fulfilment, stock change, or outbox intent.
 - [x] **Reconciliation/expiry service gates:** provider fixture tests cover missing-webhook recovery, provider outage, day-30 pending result, concurrent expiry/webhook, and late success with expected terminal state, reservation, incident, and alert. Real-provider e2e also proves the provider's skipped-webhook status is reconciled into one fulfilment.
 - [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, possible duplicate queue job/email, SSE disconnect/reconnect, complete payment activity event order, invalid-signature incident visibility, and event isolation pass without changing the one API intent or committed payment state.
 - [x] **Contract service gates:** OpenAPI route/auth/status declarations and provider initialization/status plus queue durable acceptance/correlation fixtures pass. Webhook fixture coverage is exercised in integration/e2e; uncertain queue acknowledgement duplication remains open.
-- [ ] **Compose end-to-end:** real containers pass login → cart → checkout → provider completion → webhook → paid cart/fulfilment/stock/email/SSE, with final database and log assertions.
+- [x] **Compose end-to-end:** real containers pass login → cart → checkout → provider completion → webhook → paid cart/fulfilment/stock/email/SSE, with final database and log assertions.
 - [x] **Compose failure end-to-end:** duplicate webhook, provider timeout, missed webhook reconciliation, invalid signature, and queue outage/recovery pass with final-state assertions.
-- [ ] Record gate commands/results and every skipped or blocked suite; do not use a coverage percentage as a substitute for concurrency or crash tests.
+- [x] Record gate commands/results and every skipped or blocked suite; do not use a coverage percentage as a substitute for concurrency or crash tests.
 
 ## 13. API deployment gates — complete in order
 
-- [ ] **D1 Configuration:** restrict API and health exposure to trusted network/host loopback; set non-default runtime secrets, allowed origins, fixed internal URLs, and persistent `api.db` mount.
+- [x] **D1 Configuration:** restrict API and health exposure to trusted network/host loopback; set non-default runtime secrets, allowed origins, fixed internal URLs, and persistent `api.db` mount.
 - [ ] **D1 Configuration:** verify no secrets are committed, baked into the image, or emitted in logs/responses.
 - [x] **D2 Artifact:** use a patch-pinned Alpine Node base image; record its digest and dependency lockfile; avoid moving `latest` tags.
 - [x] **D2 Artifact:** build a multi-stage image with production-only runtime dependencies, non-root user, writable API data mount, and health check.
 - [x] **D2 Artifact:** reproduce Yarn install/build, smoke-start the image, and confirm static, unit, integration, and contract gates are green; complete Compose end-to-end gates at D5/D6.
-- [ ] **D3 Persistence:** verify API volume ownership and available space; take a SQLite-safe pre-migration backup when a database already exists.
-- [ ] **D3 Persistence:** run API `up` migration once before API startup; prohibit deployment-time `down`.
+- [x] **D3 Persistence:** verify API volume ownership and available space; take a SQLite-safe pre-migration backup when a database already exists.
+- [x] **D3 Persistence:** run API `up` migration once before API startup; prohibit deployment-time `down`.
 - [x] **D4 Readiness:** start the API image after migrations and verify `/health/ready` confirms schema/database health.
 - [x] **D4 Dependencies:** verify provider and queue endpoints/auth contracts are reachable for checkout and notification smoke tests in the real-service Japa e2e path.
-- [ ] **D5 Functional smoke:** verify seeded login, product/cart reads, checkout, provider-confirmed completion, payment read, one fulfilment, stock decrement, outbox acceptance, SSE, and OpenAPI fetch in Compose.
+- [x] **D5 Functional smoke:** verify seeded login, product/cart reads, checkout, provider-confirmed completion, payment read, one fulfilment, stock decrement, outbox acceptance, SSE, and OpenAPI fetch in Compose.
 - [x] **D6 Recovery smoke:** replay checkout key and webhook; interrupt/restore provider and queue; verify no duplicate payment/fulfilment and eventual reconciliation/outbox drain.
 - [x] **D6 Security smoke:** reject and log an invalid webhook signature without changing payment state.
-- [ ] **D7 Operations:** document local start/stop, migrations, disposable seed/reset, configuration, scenario walkthrough, test commands, request-ID tracing, backup/restore, and manual late-success resolution in README.
-- [ ] **D7 Operations:** record every deployment-gate result and any unrun check; do not expose the API if a pre-traffic gate fails.
+- [x] **D7 Operations:** document local start/stop, migrations, disposable seed/reset, configuration, scenario walkthrough, test commands, request-ID tracing, backup/restore, and manual late-success resolution in README.
+- [x] **D7 Operations:** record every deployment-gate result and any unrun check; do not expose the API if a pre-traffic gate fails.
 - [ ] Prepare rollback: preserve database/logs, restore a previous image only if schema-compatible, otherwise restore the verified pre-migration backup into an isolated volume; never use production `down`.
-- [ ] Restrict full local reset to an explicitly disposable demo volume.
+- [x] Restrict full local reset to an explicitly disposable demo volume.
 
 ## 14. Required cross-service contracts (API integration blockers)
 
-- [ ] Confirm provider `POST /payments/initialise` is idempotent by reference/details including `checkout_expires_at`, and rejects conflicting details.
-- [ ] Confirm authenticated provider `GET /payments/:reference` returns reference, amount, currency, status, and URL when available, or `404` while delayed initialization has not committed.
-- [ ] Confirm the provider exposes an active failure-scenario catalogue and signs raw webhook bodies with stable `event_id` values; delivery retries `503`/network failures and stops on `2xx` or permanent `4xx`.
-- [ ] Confirm authenticated queue `POST /jobs` durably accepts each call, treats `notification_key` as correlation metadata, may create a second job/email after an uncertain retry, and distinguishes acceptance from temporary failure.
-- [ ] Confirm the frontend sends Bearer tokens and checkout idempotency keys, keeps a key for HTTP retries, uses a new key for a new attempt, opens an Authorization-capable SSE stream, and refetches payment state after reconnect.
-- [ ] Confirm the documentation service can fetch public `/v1/api_docs.json` from its allowed CORS origin and represents Bearer and webhook-HMAC authentication separately.
-- [ ] Block API integration acceptance if any required provider/queue contract is absent; do not compensate by reading another service's database or weakening API invariants.
+- [x] Confirm provider `POST /payments/initialise` is idempotent by reference/details including `checkout_expires_at`, and rejects conflicting details.
+- [x] Confirm authenticated provider `GET /payments/:reference` returns reference, amount, currency, status, and URL when available, or `404` while delayed initialization has not committed.
+- [x] Confirm the provider exposes an active failure-scenario catalogue and signs raw webhook bodies with stable `event_id` values; delivery retries `503`/network failures and stops on `2xx` or permanent `4xx`.
+- [x] Confirm authenticated queue `POST /jobs` durably accepts each call, treats `notification_key` as correlation metadata, may create a second job/email after an uncertain retry, and distinguishes acceptance from temporary failure.
+- [x] Confirm the frontend sends Bearer tokens and checkout idempotency keys, keeps a key for HTTP retries, uses a new key for a new attempt, opens an Authorization-capable SSE stream, and refetches payment state after reconnect.
+- [x] Confirm the documentation service can fetch public `/v1/api_docs.json` from its allowed CORS origin and represents Bearer and webhook-HMAC authentication separately.
+- [x] Block API integration acceptance if any required provider/queue contract is absent; do not compensate by reading another service's database or weakening API invariants.
 
 ## 12. Progress and verification record
 
@@ -267,3 +267,14 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - API image `sha256:51a850e187541ca505bc5cf6e1213725b35caadf06b4062ae83f286f2357766c` built from Node `24.1.0-alpine3.21` pinned to `sha256:dfea0736e82fef246aba86b2082a5e86c4825470302692b841d097dd61253b79`; runtime UID/GID is `10001:10001`.
 - On an isolated disposable volume, compiled production `migrate.js up` migrated and seeded successfully; the container returned `/health/ready` 200 as UID 10001. Removed only the temporary API container, project network, and project volumes.
 - Still open: queue/SMTP outage and restart/lost-ack replay, API dispatcher crash recovery, complete high-concurrency/crash gates, full API Compose acceptance, migration preservation safety, secret scan, and downstream documentation/frontend integration. Do not mark API complete until those gates pass.
+
+## Additional verification — 2026-11-14
+
+- `yarn workspace @executivepros/api test`: **passed**, 38 Japa tests across unit, integration, contract, and real-provider e2e suites. `typecheck`, `lint`, and `build` passed; the repo-wide `yarn lint` also passed.
+- `yarn workspace @executivepros/queue test`: **passed**, 11 Japa tests. `typecheck`, `lint`, and `build` passed. The Japa e2e suite still has no automated Compose/crash tests.
+- `yarn workspace @executivepros/provider test`: **passed**, 10 Japa tests. `typecheck`, `lint`, and `build` passed. Exhaustive provider outage, crash-window, and scenario-matrix gates remain open.
+- `yarn workspace @executivepros/frontend test:unit`: **passed**, 13 tests; `test:integration`: **passed**, 10 tests; `test:e2e`: **passed**, 7 Playwright tests against isolated Compose project `e2e-finalize` after an initial run exposed a terminal-status refresh race. The frontend now checks retained terminal payment notifications when the checkout intent arrives. The isolated API logs confirmed webhook success, payment transition, and queue acceptance.
+- `yarn workspace @executivepros/api-docs test:unit`: **passed**, 7 tests; `test:integration`: **passed**, 2 tests; `test:e2e`: **passed**, 6 Playwright tests against the isolated docs/API origins, including Swagger cart creation, keyed checkout, provider payment, and API-confirmed status.
+- Root `yarn test:deployment`: **passed**, 25 tests. `yarn lint` and `yarn format:check:services` passed. All six services in `e2e-finalize` became healthy; no default project or volume was changed.
+- The full frontend browser run first failed four status assertions while the terminal activity/checkout state was racing. After the retained-notification reconciliation fix and frontend image rebuild, the same suite passed 7/7.
+- Still unrun: full Docs Try-it checkout/provider flow; frontend recovery, accessibility, and rollback rehearsals; provider exhaustive failure/restart matrix; queue child-process/lost-ack e2e; Mailpit capacity and separate SMTP-classification gates; secrets scan; external README review; and submission artifacts. Keep these gates open.

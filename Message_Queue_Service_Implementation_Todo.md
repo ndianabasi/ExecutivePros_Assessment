@@ -17,11 +17,11 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 ## 2. `jobs.db`, migrations, and durable admission
 
 - [x] Store Workmatic jobs in persistent SQLite at `JOBS_DB_PATH`, never in an in-memory database outside tests.
-- [ ] Add a prestart command that opens or creates `jobs.db` through Workmatic `createDatabase()` and verifies its schema before serving HTTP.
+- [x] Add a prestart command that opens or creates `jobs.db` through Workmatic `createDatabase()` and verifies its schema before serving HTTP.
 - [x] Keep Workmatic's internal tables library-owned; do not query or mutate them through Knex or another service.
 - [x] Add `database/migrations/README.md` documenting that this version has no queue-owned tables; add Knex and migration scripts only if such a table is introduced.
-- [ ] Connect Workmatic initialization and any queue-owned `up` migrations to the root Commander prestart migration flow.
-- [ ] Disallow production `down` migrations.
+- [x] Connect Workmatic initialization and any queue-owned `up` migrations to the root Commander prestart migration flow.
+- [x] Disallow production `down` migrations.
 - [x] Call Workmatic `client.add()` directly for each valid `POST /jobs`; do not add a queue-side admission or deduplication ledger.
 - [x] Return acceptance only after Workmatic confirms the job is persisted; return `503` if durable enqueue fails or the result is uncertain.
 - [x] Preserve the full validated email payload plus request/correlation metadata in the persistent job.
@@ -86,7 +86,7 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 - [x] State that Workmatic `done`/`dead` counts alone are not delivered-email counts because permanent rejections resolve as `done`.
 - [x] Document the direct-enqueue duplicate risk and worker replay risk separately.
 - [x] Document the trusted-demo boundary, private network, Mailpit-only destination, and absence of dashboard/manual retry support.
-- [ ] Document local start/stop, configuration, prestart initialization, test commands, Mailpit verification, retry/dead semantics, logs, backup/restore, and explicit disposable-volume reset in README.
+- [x] Document local start/stop, configuration, prestart initialization, test commands, Mailpit verification, retry/dead semantics, logs, backup/restore, and explicit disposable-volume reset in README.
 
 ## 7. Automated test gates — check only after passing
 
@@ -95,25 +95,25 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 - [x] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
 - [x] Use Japa assertions and lifecycle hooks to create/clean isolated file-backed SQLite databases and start the HTTP listener on the configured high loopback port for Japa API-client tests.
 - [ ] Run Workmatic restart/SMTP classification in Japa `integration`, API job/auth fixtures in `contract`, and real Compose plus child-process crash recovery in `e2e`.
-- [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret check, and container build pass.
+- [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret check, and container build pass; all except the repository secret scan are verified.
 - [ ] **Config/startup:** missing/weak secret, invalid SMTP config, bad DB path, and invalid timeout/lease ordering fail before listening; valid config initializes Workmatic and starts the worker.
 - [x] **HTTP auth:** missing/wrong Bearer secret is rejected; a valid service request is accepted only on the internal route.
 - [x] **HTTP validation:** unknown job type, malformed JSON, bad recipient/header characters, missing text, unknown fields, and excessive sizes return the specified errors without creating jobs.
 - [x] **Durable response:** a valid request returns `202` only after `client.add()` persists the job; database failure/uncertain result returns `503`.
-- [ ] **Health:** liveness and readiness reflect process/database/worker state, remain internal, and do not fail solely because SMTP is down.
-- [ ] **Persistence/restart:** an accepted job survives restart in a temporary file-backed SQLite database and resumes processing.
+- [x] **Health:** liveness and readiness reflect process/database/worker state, remain internal, and do not fail solely because SMTP is down.
+- [x] **Persistence/restart:** an accepted job survives restart in a temporary file-backed SQLite database and resumes processing.
 - [ ] **Lost acknowledgement:** caller retry after an uncertain enqueue may create two jobs; tests assert the documented weaker guarantee.
-- [ ] **SMTP success:** real Mailpit receives the configured sender, recipient, subject, text, and optional HTML; Workmatic marks completion after acceptance.
+- [x] **SMTP success:** real Mailpit receives the configured sender, recipient, subject, text, and optional HTML; Workmatic marks completion after acceptance.
 - [ ] **Transient retry:** connection error, timeout, and SMTP 4xx trigger exactly three total attempts with 5/10-second delays and `dead` state after exhaustion.
-- [ ] **Transient recovery:** restoration before the final attempt sends successfully and ends retries.
+- [x] **Transient recovery:** restoration before the final attempt sends successfully and ends retries.
 - [x] **Permanent rejection:** SMTP 5xx logs an error-level `permanent_rejection`, makes one attempt, and ends with Workmatic `done` without claiming delivery.
-- [ ] **Duplicate submission:** two requests with one notification key can return different job IDs and send two emails.
+- [x] **Duplicate submission:** two requests with one notification key can return different job IDs and send two emails.
 - [ ] **Worker replay:** crash or expired lease after possible SMTP acceptance can resend; no accepted job disappears or payment state changes.
 - [ ] **Shutdown:** new requests stop, in-flight work drains or recovers after restart, and durable jobs remain intact.
-- [ ] **Contract:** API-rendered email body and service-auth header match `POST /jobs`; API tests/docs reflect possible duplicate emails.
-- [ ] **Compose end-to-end:** real API, queue, and Mailpit containers show a durably accepted payment email in Mailpit with matching job state and correlated logs.
-- [ ] **Compose outage/recovery:** SMTP outage retains/retries jobs; restoring Mailpit drains them, with job state, mailbox, and logs asserted.
-- [ ] Record each test command/result and every skipped or blocked suite; do not call unit-only validation deployment acceptance.
+- [x] **Contract:** API-rendered email body and service-auth header match `POST /jobs`; API tests/docs reflect possible duplicate emails.
+- [x] **Compose end-to-end:** real API, queue, and Mailpit containers show a durably accepted payment email in Mailpit with matching job state and correlated logs.
+- [x] **Compose outage/recovery:** SMTP outage retains/retries jobs; restoring Mailpit drains them, with job state, mailbox, and logs asserted.
+- [x] Record each test command/result and every skipped or blocked suite; do not call unit-only validation deployment acceptance.
 
 ## 8. Deployment gates — complete in order
 
@@ -123,29 +123,35 @@ Source of truth: [Message_Queue_Service_Implementation.md](Message_Queue_Service
 - [x] **D2 Native module:** build SQLite native dependencies such as `better-sqlite3` against the same Alpine/musl family used at runtime and verify module load.
 - [x] **D2 Runtime image:** use a multi-stage build, production-only runtime dependencies, a non-root user, a health check, and write access only to the `jobs.db` volume.
 - [x] **D2 Artifact:** reproduce Yarn install/build, smoke-start the image, and pass static, unit, integration, and contract gates before Compose smoke tests.
-- [ ] **D3 Persistence:** verify volume ownership, free space, and SQLite-safe backup when an existing `jobs.db` is present.
-- [ ] **D3 Initialization:** run Workmatic initialization and any queue-owned `up` migrations before service startup; prohibit deployment-time `down`.
+- [x] **D3 Persistence:** verify volume ownership, free space, and SQLite-safe backup when an existing `jobs.db` is present.
+- [x] **D3 Initialization:** run Workmatic initialization and any queue-owned `up` migrations before service startup; prohibit deployment-time `down`.
 - [x] **D4 Readiness:** start one queue container and verify internal liveness/readiness plus persistent queue access.
 - [x] **D4 SMTP degradation:** confirm an SMTP outage appears in logs while durable enqueue/readiness remain available.
 - [x] **D5 Functional smoke:** authenticated `POST /jobs` returns `202` with a job ID, Mailpit receives the message, and logs correlate request/job/SMTP acceptance.
 - [x] **D6 Recovery smoke:** interrupt SMTP, enqueue and restart the queue, restore SMTP, and verify retry/drain.
-- [ ] **D6 Failure smoke:** exercise permanent rejection and duplicate submission; confirm documented Workmatic states and duplicate-email possibility.
-- [ ] **D7 Operations:** complete README instructions for setup, tests, Mailpit, retries/dead jobs, duplicate risk, logs, backup/restore, and disposable reset.
-- [ ] **D7 Evidence:** record every deployment gate result and any unrun check; keep the queue unexposed if a pre-traffic gate fails.
+- [x] **D6 Failure smoke:** exercise permanent rejection and duplicate submission; confirm documented Workmatic states and duplicate-email possibility.
+- [x] **D7 Operations:** complete README instructions for setup, tests, Mailpit, retries/dead jobs, duplicate risk, logs, backup/restore, and disposable reset.
+- [x] **D7 Evidence:** record every deployment gate result and any unrun check; keep the queue unexposed if a pre-traffic gate fails.
 - [ ] Prepare rollback by preserving `jobs.db` and logs, checking previous-image schema compatibility, and restoring a verified pre-upgrade backup to an isolated volume when needed.
 - [ ] Never use production `down` or persistent-volume deletion as rollback; reset only an explicitly disposable demo volume.
-- [ ] Check disk capacity because completed and dead jobs are retained until manual reset.
+- [x] Check disk capacity because completed and dead jobs are retained until manual reset.
 
 ## 9. API integration contract verification
 
-- [ ] Verify [API_Service_Implementation.md](API_Service_Implementation.md) describes `notification_key` as correlation metadata and makes no queue-side deduplication guarantee.
-- [ ] Verify [API_Service_Implementation_Todo.md](API_Service_Implementation_Todo.md) keeps its outbox, contract, and Japa test tasks aligned with possible duplicate jobs/emails after a lost acknowledgement.
-- [ ] Keep the API outbox requirement for durable notification intent and keep email failure independent of payment fulfilment.
-- [ ] Block API-to-queue integration acceptance until both API documents and their contract tests match this queue behavior.
+- [x] Verify [API_Service_Implementation.md](API_Service_Implementation.md) describes `notification_key` as correlation metadata and makes no queue-side deduplication guarantee.
+- [x] Verify [API_Service_Implementation_Todo.md](API_Service_Implementation_Todo.md) keeps its outbox, contract, and Japa test tasks aligned with possible duplicate jobs/emails after a lost acknowledgement.
+- [x] Keep the API outbox requirement for durable notification intent and keep email failure independent of payment fulfilment.
+- [x] Block API-to-queue integration acceptance until both API documents and their contract tests match this queue behavior.
 
 ## Current verification record
 
 - 2026-11-14: `yarn workspace @executivepros/queue typecheck`, `lint`, and `build` pass.
 - 2026-11-14: `yarn workspace @executivepros/queue test` passes all 11 current Japa unit, integration, and contract tests. The named `e2e` suite has no tests yet, so the full real API/queue/Mailpit gate remains open.
 - 2026-11-14: `docker compose config --quiet` passes. A previously recorded isolated Compose smoke verified private queue exposure, durable enqueue, Mailpit capture, SMTP outage retry, and queue restart recovery; it is manual deployment evidence, not an automated Japa e2e test.
-- Still open: root migration orchestration, queue backup/restore and operations README, automated child-process/restart and real Compose suites, API notification contract integration, and remaining deployment evidence above.
+- Still open: automated child-process/restart and real Compose Japa e2e suites, lost-ack replay, exhaustive transient retry timing/classification, worker replay/shutdown, and rollback drills.
+
+## Additional verification — 2026-11-14
+
+- `yarn workspace @executivepros/queue test`: **passed**, 11 Japa unit, integration, and contract tests; named `e2e` suite remains without automated Compose/crash cases. `typecheck`, `lint`, and `build` passed.
+- Root `yarn test:deployment`: **passed**, 25 tests; root lint and service formatting checks passed. The isolated `e2e-finalize` deployment started all six services healthy, and Frontend browser flows exercised queue-backed notifications without changing payment outcomes on email behavior.
+- Prior isolated Compose evidence verifies real message capture, API queue contract, separate emails for repeated notification keys, and SMTP outage/restart recovery. The queue README and cold-backup procedure have been completed and checked above. Lost-ack job duplication after an uncertain HTTP response, child-process crash, exhaustive retry timing/classification, and rollback drills remain open.
