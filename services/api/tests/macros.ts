@@ -10,7 +10,10 @@ export interface ApiTestFixture {
   providerInitCalls: { count: number }
   providerLookups: { status: number; payment?: Record<string, unknown>; delayMs: number; started: boolean }
   apiPort: number
-  queue?: { requests: Array<{ authorization: string; requestId: string; body: Record<string, unknown> }>; responseStatus: number }
+  queue?: {
+    requests: Array<{ authorization: string; requestId: string; body: Record<string, unknown> }>
+    responseStatus: number
+  }
   dispatchOutbox?: () => Promise<void>
 }
 

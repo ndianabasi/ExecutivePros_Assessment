@@ -5,9 +5,13 @@ import { loadConfig } from '../src/config.js'
 import { assertDownMigrationAllowed } from '../src/migration-policy.js'
 
 const action = process.argv[2]
-if (action !== 'up' && action !== 'down') throw new Error('Use migrate:up or migrate:down')
+if (action !== 'up' && action !== 'down') {
+  throw new Error('Use migrate:up or migrate:down')
+}
 const config = loadConfig()
-if (action === 'down') assertDownMigrationAllowed(config.nodeEnv)
+if (action === 'down') {
+  assertDownMigrationAllowed(config.nodeEnv)
+}
 
 const db = knex(knexConfig)
 try {

@@ -12,9 +12,9 @@
   "scripts": {
     "postinstall": "husky",
     "workspace:check": "yarn workspaces list --verbose",
-    "lint": "eslint \"services/*/{src,tests}/**/*.{js,jsx,cjs,mjs,ts,tsx}\"",
-    "format:services": "prettier --write \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
-    "format:check:services": "prettier --check \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
+    "lint": "eslint \"services/*/{src,tests}/**/*.{js,jsx,cjs,mjs,ts,tsx}\" \"services/{api,provider,queue}/{bin,database}/**/*.{js,jsx,cjs,mjs,ts,tsx}\" \"services/frontend/scripts/**/*.{js,jsx,cjs,mjs,ts,tsx}\"",
+    "format:services": "prettier --write \"services/*/{src,tests}/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\" \"services/{api,provider,queue}/{bin,database}/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\" \"services/frontend/scripts/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
+    "format:check:services": "prettier --check \"services/*/{src,tests}/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\" \"services/{api,provider,queue}/{bin,database}/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\" \"services/frontend/scripts/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
     "deploy:local": "node bin/assessment.mjs deploy:local",
     "db:up": "node bin/assessment.mjs db:up",
     "db:down": "node bin/assessment.mjs db:down",
@@ -30,7 +30,17 @@
       "eslint --fix",
       "eslint"
     ],
-    "services/*/{src,tests}/**/*.css": "prettier --write"
+    "services/*/{src,tests}/**/*.css": "prettier --write",
+    "services/{api,provider,queue}/{bin,database}/**/*.{js,jsx,cjs,mjs,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix",
+      "eslint"
+    ],
+    "services/frontend/scripts/**/*.{js,jsx,cjs,mjs,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix",
+      "eslint"
+    ]
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

@@ -11,7 +11,9 @@ const valid = {
 describe('browser origin configuration', () => {
   it('accepts the four host-browser origins and normalizes them', () => {
     expect(parseRuntimeConfig(valid)).toEqual(valid)
-    expect(parseBrowserOrigin('https://shop.example.test:9443/', 'API_ORIGIN')).toBe('https://shop.example.test:9443')
+    expect(parseBrowserOrigin('https://shop.example.test:9443/', 'API_ORIGIN')).toBe(
+      'https://shop.example.test:9443',
+    )
   })
 
   it.each([

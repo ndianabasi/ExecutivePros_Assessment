@@ -3,7 +3,11 @@ import globals from 'globals'
 import jsdoc from 'eslint-plugin-jsdoc'
 import tseslint from 'typescript-eslint'
 
-const sourceFiles = ['services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx}']
+const sourceFiles = [
+  'services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx}',
+  'services/{api,provider,queue}/{bin,database}/**/*.{js,jsx,cjs,mjs,ts,tsx}',
+  'services/frontend/scripts/**/*.{js,jsx,cjs,mjs,ts,tsx}',
+]
 
 export default tseslint.config(
   {

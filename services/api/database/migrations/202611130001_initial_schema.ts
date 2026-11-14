@@ -1,5 +1,11 @@
 import type { Knex } from 'knex'
 
+/**
+ * Creates the API tables, constraints, and indexes required by the service.
+ *
+ * @param knex - Knex migration connection.
+ * @returns A promise that resolves after the initial schema is created.
+ */
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('users', (table) => {
     table.increments('id').primary()
@@ -86,11 +92,17 @@ export async function up(knex: Knex): Promise<void> {
     table.check('amount_minor > 0')
     table.check('initialisation_attempts >= 0')
   })
-  await knex.raw("CREATE UNIQUE INDEX payments_one_pending_per_cart ON payments(cart_id) WHERE status = 'pending'")
+  await knex.raw(
+    "CREATE UNIQUE INDEX payments_one_pending_per_cart ON payments(cart_id) WHERE status = 'pending'",
+  )
   await knex.raw('CREATE INDEX payments_user_page ON payments(user_id, created_at DESC, id DESC)')
   await knex.raw('CREATE INDEX payments_cart_attempts ON payments(cart_id, created_at DESC, id DESC)')
-  await knex.raw("CREATE INDEX payments_reconcile_scan ON payments(status, reconcile_after) WHERE status = 'pending'")
-  await knex.raw("CREATE INDEX payments_expiry_scan ON payments(status, checkout_expires_at) WHERE status = 'pending'")
+  await knex.raw(
+    "CREATE INDEX payments_reconcile_scan ON payments(status, reconcile_after) WHERE status = 'pending'",
+  )
+  await knex.raw(
+    "CREATE INDEX payments_expiry_scan ON payments(status, checkout_expires_at) WHERE status = 'pending'",
+  )
 
   await knex.schema.createTable('checkout_requests', (table) => {
     table.increments('id').primary()
@@ -114,7 +126,9 @@ export async function up(knex: Knex): Promise<void> {
     table.unique(['payment_id', 'product_id'])
     table.check('quantity > 0')
   })
-  await knex.raw("CREATE INDEX stock_reservations_active_by_product ON stock_reservations(product_id, status) WHERE status = 'active'")
+  await knex.raw(
+    "CREATE INDEX stock_reservations_active_by_product ON stock_reservations(product_id, status) WHERE status = 'active'",
+  )
 
   await knex.schema.createTable('fulfillments', (table) => {
     table.increments('id').primary()
@@ -172,9 +186,17 @@ export async function up(knex: Knex): Promise<void> {
     table.timestamp('created_at').notNullable().defaultTo(knex.fn.now())
     table.check('attempts >= 0')
   })
-  await knex.raw('CREATE INDEX notification_outbox_due ON notification_outbox(accepted_at, next_attempt_at, lease_until)')
+  await knex.raw(
+    'CREATE INDEX notification_outbox_due ON notification_outbox(accepted_at, next_attempt_at, lease_until)',
+  )
 }
 
+/**
+ * Drops the API tables in dependency order.
+ *
+ * @param knex - Knex migration connection.
+ * @returns A promise that resolves after the schema is removed.
+ */
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('notification_outbox')
   await knex.schema.dropTableIfExists('payment_incidents')

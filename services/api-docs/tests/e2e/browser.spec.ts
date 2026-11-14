@@ -12,54 +12,132 @@ function liveSpec() {
     openapi: '3.1.0',
     info: { title: 'Browser fixture API', version: '1.0.0' },
     servers: [{ url: apiOrigin }],
-    tags: [{ name: 'Auth' }, { name: 'Webhooks' }, { name: 'Events' }, { name: 'Products' }, { name: 'Payments' }],
+    tags: [
+      { name: 'Auth' },
+      { name: 'Webhooks' },
+      { name: 'Events' },
+      { name: 'Products' },
+      { name: 'Payments' },
+    ],
     paths: {
       '/v1/api_docs.json': {
-        get: { operationId: 'getOpenApiDocument', summary: 'Fetch OpenAPI', tags: ['Auth'], responses: { '200': { description: 'OpenAPI' } } },
+        get: {
+          operationId: 'getOpenApiDocument',
+          summary: 'Fetch OpenAPI',
+          tags: ['Auth'],
+          responses: { '200': { description: 'OpenAPI' } },
+        },
       },
       '/v1/demo/users': {
-        get: { operationId: 'listDemoUsers', summary: 'List demo users', tags: ['Auth'], responses: { '200': { description: 'Users' } } },
+        get: {
+          operationId: 'listDemoUsers',
+          summary: 'List demo users',
+          tags: ['Auth'],
+          responses: { '200': { description: 'Users' } },
+        },
       },
       '/v1/login': {
         post: {
-          operationId: 'login', summary: 'Login', tags: ['Auth'], security: [],
-          requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { user_id: { type: 'integer' } }, required: ['user_id'], example: { user_id: 1 } } } } },
+          operationId: 'login',
+          summary: 'Login',
+          tags: ['Auth'],
+          security: [],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { user_id: { type: 'integer' } },
+                  required: ['user_id'],
+                  example: { user_id: 1 },
+                },
+              },
+            },
+          },
           responses: { '200': { description: 'Login' } },
         },
       },
       '/v1/logout': {
-        post: { operationId: 'logout', summary: 'Logout', tags: ['Auth'], security: secured, responses: { '204': { description: 'Logged out' } } },
+        post: {
+          operationId: 'logout',
+          summary: 'Logout',
+          tags: ['Auth'],
+          security: secured,
+          responses: { '204': { description: 'Logged out' } },
+        },
       },
       '/v1/webhooks/payment': {
-        post: { operationId: 'webhook', summary: 'Provider webhook', tags: ['Webhooks'], security: [{ providerWebhookHmac: [] }], responses: { '200': { description: 'Accepted' } } },
+        post: {
+          operationId: 'webhook',
+          summary: 'Provider webhook',
+          tags: ['Webhooks'],
+          security: [{ providerWebhookHmac: [] }],
+          responses: { '200': { description: 'Accepted' } },
+        },
       },
       '/v1/events': {
-        get: { operationId: 'events', summary: 'Payment events', tags: ['Events'], security: secured, responses: { '200': { description: 'Stream' } } },
+        get: {
+          operationId: 'events',
+          summary: 'Payment events',
+          tags: ['Events'],
+          security: secured,
+          responses: { '200': { description: 'Stream' } },
+        },
       },
       '/v1/products': {
-        get: { operationId: 'products', summary: 'List products', tags: ['Products'], security: secured, responses: { '200': { description: 'Products' } } },
+        get: {
+          operationId: 'products',
+          summary: 'List products',
+          tags: ['Products'],
+          security: secured,
+          responses: { '200': { description: 'Products' } },
+        },
       },
       '/v1/cart/checkout': {
         post: {
-          operationId: 'checkout', summary: 'Checkout', tags: ['Payments'], security: secured,
+          operationId: 'checkout',
+          summary: 'Checkout',
+          tags: ['Payments'],
+          security: secured,
           parameters: [{ in: 'header', name: 'Idempotency-Key', required: true, schema: { type: 'string' } }],
-          requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { cart_id: { type: 'integer' } } } } } },
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: { type: 'object', properties: { cart_id: { type: 'integer' } } },
+              },
+            },
+          },
           responses: { '201': { description: 'Created' } },
         },
       },
     },
-    components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' }, providerWebhookHmac: { type: 'apiKey', in: 'header', name: 'X-Provider-Signature' } } },
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer' },
+        providerWebhookHmac: { type: 'apiKey', in: 'header', name: 'X-Provider-Signature' },
+      },
+    },
   }
 }
 
-test('real browser enforces docs identity, special-operation and checkout-key rules', async ({ page, context }) => {
-  const seen: Array<{ path: string; method: string; authorization?: string; idempotencyKey?: string; body?: string }> = []
+test('real browser enforces docs identity, special-operation and checkout-key rules', async ({
+  page,
+  context,
+}) => {
+  const seen: Array<{
+    path: string
+    method: string
+    authorization?: string
+    idempotencyKey?: string
+    body?: string
+  }> = []
   const outsideRequests: string[] = []
   let productsOutcome: 'success' | 'network' | 'unauthorized' = 'success'
   let logoutUnavailable = false
-  page.on('request', request => {
+  page.on('request', (request) => {
     const url = new URL(request.url())
-    if (url.origin !== new URL(docsUrl).origin && url.origin !== apiOrigin) outsideRequests.push(request.url())
+    if (url.origin !== new URL(docsUrl).origin && url.origin !== apiOrigin)
+      outsideRequests.push(request.url())
   })
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await context.addInitScript(() => {
@@ -67,23 +145,58 @@ test('real browser enforces docs identity, special-operation and checkout-key ru
     localStorage.setItem('api-docs.identity.v1', JSON.stringify({ token: 'bad', user: 'invalid' }))
     sessionStorage.setItem('invalid-identity-seeded', '1')
   })
-  await page.route(`${apiOrigin}/**`, async route => {
+  await page.route(`${apiOrigin}/**`, async (route) => {
     const request = route.request()
     const url = new URL(request.url())
     const path = url.pathname
     const method = request.method()
-    seen.push({ path, method, authorization: request.headers().authorization, idempotencyKey: request.headers()['idempotency-key'], body: request.postData() ?? undefined })
+    seen.push({
+      path,
+      method,
+      authorization: request.headers().authorization,
+      idempotencyKey: request.headers()['idempotency-key'],
+      body: request.postData() ?? undefined,
+    })
     const cors = {
       'access-control-allow-origin': docsUrl,
       'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
       'access-control-allow-headers': 'Authorization, Content-Type, Idempotency-Key',
     }
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: cors, body: '' })
-    if (path === '/v1/api_docs.json') return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' }, body: JSON.stringify(liveSpec()) })
-    if (path === '/v1/demo/users') return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: [{ id: 1, first_name: 'Assessment', last_name: 'User', role: 'user' }, { id: 2, first_name: 'Assessment', last_name: 'Admin', role: 'admin' }] }) })
+    if (path === '/v1/api_docs.json')
+      return route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' },
+        body: JSON.stringify(liveSpec()),
+      })
+    if (path === '/v1/demo/users')
+      return route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          data: [
+            { id: 1, first_name: 'Assessment', last_name: 'User', role: 'user' },
+            { id: 2, first_name: 'Assessment', last_name: 'Admin', role: 'admin' },
+          ],
+        }),
+      })
     if (path === '/v1/login') {
       const userId = Number(JSON.parse(request.postData() ?? '{}').user_id)
-      return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: { token: userId === 2 ? 'admin-demo-token-0123456789' : demoToken, user: { id: userId, first_name: 'Assessment', last_name: userId === 2 ? 'Admin' : 'User', role: userId === 2 ? 'admin' : 'user' } } }) })
+      return route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            token: userId === 2 ? 'admin-demo-token-0123456789' : demoToken,
+            user: {
+              id: userId,
+              first_name: 'Assessment',
+              last_name: userId === 2 ? 'Admin' : 'User',
+              role: userId === 2 ? 'admin' : 'user',
+            },
+          },
+        }),
+      })
     }
     if (path === '/v1/logout') {
       if (logoutUnavailable) return route.abort('failed')
@@ -91,11 +204,43 @@ test('real browser enforces docs identity, special-operation and checkout-key ru
     }
     if (path === '/v1/products') {
       if (productsOutcome === 'network') return route.abort('failed')
-      if (productsOutcome === 'unauthorized') return route.fulfill({ status: 401, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ error: { code: 'unauthorized', message: 'expired', request_id: 'test-request' } }) })
-      return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: [{ id: 1, name: 'Demo notebook', price_minor: 250000, currency: 'NGN', available_stock: 20 }], meta: { page: 1, page_size: 20, total: 1 } }) })
+      if (productsOutcome === 'unauthorized')
+        return route.fulfill({
+          status: 401,
+          headers: { ...cors, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            error: { code: 'unauthorized', message: 'expired', request_id: 'test-request' },
+          }),
+        })
+      return route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          data: [{ id: 1, name: 'Demo notebook', price_minor: 250000, currency: 'NGN', available_stock: 20 }],
+          meta: { page: 1, page_size: 20, total: 1 },
+        }),
+      })
     }
-    if (path === '/v1/cart/checkout') return route.fulfill({ status: 201, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: { id: 1, reference: 'pay_browser_fixture', status: 'pending', payment_url: `${providerOrigin}/checkout/pay_browser_fixture` } }) })
-    return route.fulfill({ status: 404, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ error: { code: 'not_found', message: 'fixture route not found', request_id: 'test-request' } }) })
+    if (path === '/v1/cart/checkout')
+      return route.fulfill({
+        status: 201,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            id: 1,
+            reference: 'pay_browser_fixture',
+            status: 'pending',
+            payment_url: `${providerOrigin}/checkout/pay_browser_fixture`,
+          },
+        }),
+      })
+    return route.fulfill({
+      status: 404,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        error: { code: 'not_found', message: 'fixture route not found', request_id: 'test-request' },
+      }),
+    })
   })
 
   await page.goto('/')
@@ -123,24 +268,30 @@ test('real browser enforces docs identity, special-operation and checkout-key ru
   await products.locator('.opblock-summary-control').click()
   await products.getByRole('button', { name: 'Try it out' }).click()
   await products.getByRole('button', { name: 'Execute' }).click()
-  await expect.poll(() => seen.some(request => request.path === '/v1/products' && request.method === 'GET')).toBe(true)
-  expect(seen.find(request => request.path === '/v1/products')?.authorization).toBe(`Bearer ${demoToken}`)
+  await expect
+    .poll(() => seen.some((request) => request.path === '/v1/products' && request.method === 'GET'))
+    .toBe(true)
+  expect(seen.find((request) => request.path === '/v1/products')?.authorization).toBe(`Bearer ${demoToken}`)
   const checkout = page.locator('#swagger-ui .opblock').filter({ hasText: '/v1/cart/checkout' })
   await checkout.locator('.opblock-summary-control').click()
   await checkout.getByRole('button', { name: 'Try it out' }).click()
   await checkout.getByRole('textbox', { name: 'Idempotency-Key' }).fill(key)
   await checkout.getByRole('button', { name: 'Execute' }).click()
-  await expect.poll(() => seen.some(request => request.path === '/v1/cart/checkout')).toBe(true)
-  expect(seen.find(request => request.path === '/v1/cart/checkout')?.idempotencyKey).toBe(key)
+  await expect.poll(() => seen.some((request) => request.path === '/v1/cart/checkout')).toBe(true)
+  expect(seen.find((request) => request.path === '/v1/cart/checkout')?.idempotencyKey).toBe(key)
   await page.reload()
   await expect(page.locator('#identity')).toContainText('Assessment User (user)')
   await expect(page.locator('#checkout-key')).toHaveValue(key)
   logoutUnavailable = true
   await page.getByRole('button', { name: 'Switch user' }).click()
   await expect(page.locator('#identity')).toHaveText('No user selected')
-  expect(await page.evaluate(() => Object.keys(localStorage).filter(keyName => keyName.startsWith('api-docs.')))).toEqual([])
-  expect(seen.filter(request => request.path === '/v1/login')).toHaveLength(1)
-  expect(seen.some(request => request.path === '/v1/logout' && request.authorization === `Bearer ${demoToken}`)).toBe(true)
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((keyName) => keyName.startsWith('api-docs.'))),
+  ).toEqual([])
+  expect(seen.filter((request) => request.path === '/v1/login')).toHaveLength(1)
+  expect(
+    seen.some((request) => request.path === '/v1/logout' && request.authorization === `Bearer ${demoToken}`),
+  ).toBe(true)
 
   logoutUnavailable = false
   await page.locator('#seeded-user').selectOption('2')
@@ -148,8 +299,13 @@ test('real browser enforces docs identity, special-operation and checkout-key ru
   await expect(page.locator('#identity')).toContainText('Assessment Admin (admin)')
   await page.getByRole('button', { name: 'Switch user' }).click()
   await expect(page.locator('#identity')).toHaveText('No user selected')
-  expect(seen.filter(request => request.path === '/v1/login')).toHaveLength(2)
-  expect(seen.some(request => request.path === '/v1/logout' && request.authorization === 'Bearer admin-demo-token-0123456789')).toBe(true)
+  expect(seen.filter((request) => request.path === '/v1/login')).toHaveLength(2)
+  expect(
+    seen.some(
+      (request) =>
+        request.path === '/v1/logout' && request.authorization === 'Bearer admin-demo-token-0123456789',
+    ),
+  ).toBe(true)
 
   await page.locator('#seeded-user').selectOption('1')
   await page.getByRole('button', { name: 'Select user' }).click()
@@ -158,7 +314,7 @@ test('real browser enforces docs identity, special-operation and checkout-key ru
   await protectedProducts.getByRole('button', { name: 'Try it out' }).click()
   productsOutcome = 'network'
   await protectedProducts.getByRole('button', { name: 'Execute' }).click()
-  await expect.poll(() => seen.filter(request => request.path === '/v1/products').length).toBeGreaterThan(1)
+  await expect.poll(() => seen.filter((request) => request.path === '/v1/products').length).toBeGreaterThan(1)
   await expect(page.locator('#identity')).toContainText('Assessment User (user)')
   productsOutcome = 'unauthorized'
   await protectedProducts.getByRole('button', { name: 'Execute' }).click()
@@ -186,14 +342,27 @@ test('container HTTP headers and live configuration are verified in browser cont
   expect(html.headers()['content-security-policy']).toContain("script-src 'self'")
 })
 
-test('seeded-user discovery shows an actionable error and populates the picker on retry', async ({ page }) => {
+test('seeded-user discovery shows an actionable error and populates the picker on retry', async ({
+  page,
+}) => {
   let unavailable = true
-  await page.route(`${apiOrigin}/v1/demo/users`, async route => {
-    if (unavailable) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'unavailable' } }) })
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [
-      { id: 1, first_name: 'Assessment', last_name: 'User', role: 'user' },
-      { id: 2, first_name: 'Assessment', last_name: 'Admin', role: 'admin' },
-    ] }) })
+  await page.route(`${apiOrigin}/v1/demo/users`, async (route) => {
+    if (unavailable)
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'unavailable' } }),
+      })
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 1, first_name: 'Assessment', last_name: 'User', role: 'user' },
+          { id: 2, first_name: 'Assessment', last_name: 'Admin', role: 'admin' },
+        ],
+      }),
+    })
   })
   await page.goto(docsUrl)
   await expect(page.locator('.toolbar .control-card')).toHaveCount(3)
@@ -230,21 +399,40 @@ test('deployed Swagger Try it out calls the configured live API directly', async
   await expect(products.locator('.responses-wrapper')).toContainText('DEMO-NOTEBOOK')
 })
 
-test('spec errors, origin mismatch and API outage keep operations disabled until a fresh valid retry', async ({ page }) => {
+test('spec errors, origin mismatch and API outage keep operations disabled until a fresh valid retry', async ({
+  page,
+}) => {
   let mode: 'offline' | 'bad-json' | 'wrong-origin' | 'external-ref' | 'cors-denied' | 'valid' = 'offline'
-  await page.route(`${apiOrigin}/**`, async route => {
+  await page.route(`${apiOrigin}/**`, async (route) => {
     const request = route.request()
     const url = new URL(request.url())
-    const cors = { 'access-control-allow-origin': docsUrl, 'content-type': 'application/json', 'cache-control': 'no-store' }
-    if (url.pathname === '/v1/demo/users') return route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ data: [] }) })
+    const cors = {
+      'access-control-allow-origin': docsUrl,
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    }
+    if (url.pathname === '/v1/demo/users')
+      return route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ data: [] }) })
     if (url.pathname !== '/v1/api_docs.json') return route.fulfill({ status: 404, headers: cors, body: '{}' })
     if (mode === 'offline') return route.abort('failed')
     if (mode === 'bad-json') return route.fulfill({ status: 200, headers: cors, body: '{' })
-    if (mode === 'cors-denied') return route.fulfill({ status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(liveSpec()) })
-    if (mode === 'wrong-origin') return route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ ...liveSpec(), servers: [{ url: 'https://wrong.example.test' }] }) })
+    if (mode === 'cors-denied')
+      return route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(liveSpec()),
+      })
+    if (mode === 'wrong-origin')
+      return route.fulfill({
+        status: 200,
+        headers: cors,
+        body: JSON.stringify({ ...liveSpec(), servers: [{ url: 'https://wrong.example.test' }] }),
+      })
     if (mode === 'external-ref') {
       const invalid = liveSpec()
-      ;(invalid.paths['/v1/products'].get.responses['200'] as { schema: { $ref: string } }).schema = { $ref: 'https://wrong.example.test/schema.json' }
+      ;(invalid.paths['/v1/products'].get.responses['200'] as { schema: { $ref: string } }).schema = {
+        $ref: 'https://wrong.example.test/schema.json',
+      }
       return route.fulfill({ status: 200, headers: cors, body: JSON.stringify(invalid) })
     }
     return route.fulfill({ status: 200, headers: cors, body: JSON.stringify(liveSpec()) })

@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-test('seeded user checks out through provider and sees API-confirmed status and links', async ({ page, context }) => {
+test('seeded user checks out through provider and sees API-confirmed status and links', async ({
+  page,
+  context,
+}) => {
   await page.goto('/')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByLabel('User')).toBeVisible()
@@ -11,10 +14,21 @@ test('seeded user checks out through provider and sees API-confirmed status and 
   await expect(page.getByRole('heading', { name: 'Payment Failure Scenario' })).toBeVisible()
   await expect(page.getByText('Payment Provider Failure Cases')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Emails' })).toBeVisible()
-  expect(await page.getByRole('button', { name: 'Add to Cart' }).first().evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer')
-  expect(await page.getByRole('link', { name: 'Emails' }).evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer')
-  expect(await page.getByLabel('Provider Scenario').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer')
-  expect(await page.locator('label[for="scenario"]').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer')
+  expect(
+    await page
+      .getByRole('button', { name: 'Add to Cart' })
+      .first()
+      .evaluate((element) => getComputedStyle(element).cursor),
+  ).toBe('pointer')
+  expect(
+    await page.getByRole('link', { name: 'Emails' }).evaluate((element) => getComputedStyle(element).cursor),
+  ).toBe('pointer')
+  expect(
+    await page.getByLabel('Provider Scenario').evaluate((element) => getComputedStyle(element).cursor),
+  ).toBe('pointer')
+  expect(
+    await page.locator('label[for="scenario"]').evaluate((element) => getComputedStyle(element).cursor),
+  ).toBe('pointer')
   await page.getByRole('button', { name: 'Add to Cart' }).first().click()
   await expect(page.getByText('Total from API:')).toBeVisible()
   await page.getByRole('button', { name: 'Checkout', exact: true }).click()
@@ -22,10 +36,15 @@ test('seeded user checks out through provider and sees API-confirmed status and 
   await expect(checkoutFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible()
   await checkoutFrame.getByRole('button', { name: 'Pay successfully' }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 20_000 })
-  await expect(page.getByRole('status').filter({ hasText: 'success' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'success' }).first()).toBeVisible({
+    timeout: 20_000,
+  })
   await page.getByRole('link', { name: 'Payments', exact: true }).click()
   await expect(page.getByRole('table')).toContainText('success')
-  const runtime = await (await page.request.get('/config.json')).json() as { DOCS_ORIGIN: string; MAILPIT_ORIGIN: string }
+  const runtime = (await (await page.request.get('/config.json')).json()) as {
+    DOCS_ORIGIN: string
+    MAILPIT_ORIGIN: string
+  }
   const docsTabPromise = context.waitForEvent('page')
   await page.getByRole('link', { name: 'API Docs' }).click()
   const docsTab = await docsTabPromise
@@ -58,7 +77,9 @@ test('failed provider payment keeps the cart retryable with a new key', async ({
   await expect(firstFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible()
   await firstFrame.getByRole('button', { name: 'Fail payment' }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 20_000 })
-  await expect(page.getByRole('status').filter({ hasText: 'failed' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'failed' }).first()).toBeVisible({
+    timeout: 20_000,
+  })
   await page.getByRole('link', { name: 'View Payment Details' }).click()
   await expect(page.getByRole('heading', { name: 'Payment Details' })).toBeVisible()
   await page.getByRole('button', { name: 'Retry Payment With a New Key' }).click()
@@ -67,7 +88,9 @@ test('failed provider payment keeps the cart retryable with a new key', async ({
   await expect(checkoutFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible()
   await checkoutFrame.getByRole('button', { name: 'Cancel payment' }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 20_000 })
-  await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({
+    timeout: 20_000,
+  })
 })
 
 test('client timeout exposes the saved-key retry for an uncertain checkout', async ({ page }) => {
@@ -85,18 +108,31 @@ test('client timeout exposes the saved-key retry for an uncertain checkout', asy
   await expect(page).toHaveURL(/\/products$/)
   await page.getByRole('button', { name: 'Add to Cart' }).first().click()
   await page.getByRole('button', { name: 'Demo Client Timeout' }).click()
-  await expect(page.getByRole('status')).toContainText('The API may already have accepted it', { timeout: 10_000 })
-  const attemptIntent = await page.evaluate(() => JSON.parse(localStorage.getItem('executivepros.frontend.checkout.v1') ?? 'null') as { key?: string } | null)
+  await expect(page.getByRole('status')).toContainText('The API may already have accepted it', {
+    timeout: 10_000,
+  })
+  const attemptIntent = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('executivepros.frontend.checkout.v1') ?? 'null') as {
+        key?: string
+      } | null,
+  )
   expect(attemptIntent?.key).toMatch(/^[0-9a-f-]{36}$/i)
   await expect(page.getByRole('button', { name: 'Retry With Saved Key' })).toBeEnabled()
   await page.getByRole('button', { name: 'Retry With Saved Key' }).click()
   const checkoutFrame = page.frameLocator('iframe[title^="Mock payment checkout"]')
-  await expect(checkoutFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible({ timeout: 20_000 })
+  await expect(checkoutFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible({
+    timeout: 20_000,
+  })
   await checkoutFrame.getByRole('button', { name: 'Cancel payment' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({
+    timeout: 20_000,
+  })
 })
 
-test('invalid provider signature does not reopen the completed checkout dialog in a loop', async ({ page }) => {
+test('invalid provider signature does not reopen the completed checkout dialog in a loop', async ({
+  page,
+}) => {
   await page.goto('/')
   await page.getByLabel('User').selectOption({ index: 1 })
   await page.getByRole('button', { name: 'Select User' }).click()
@@ -108,13 +144,27 @@ test('invalid provider signature does not reopen the completed checkout dialog i
   await expect(checkoutFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible()
   await checkoutFrame.getByRole('button', { name: 'Pay successfully' }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 20_000 })
-  await expect(page.getByRole('status').filter({ hasText: 'pending' }).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'pending' }).first()).toBeVisible({
+    timeout: 10_000,
+  })
   const scenario = page.getByLabel('Provider Scenario')
   await expect(scenario).toBeEnabled()
-  const pendingIntent = await page.evaluate(() => JSON.parse(localStorage.getItem('executivepros.frontend.checkout.v1') ?? 'null') as { scenario?: string; key?: string } | null)
+  const pendingIntent = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('executivepros.frontend.checkout.v1') ?? 'null') as {
+        scenario?: string
+        key?: string
+      } | null,
+  )
   await scenario.selectOption('WEBHOOK_001')
   await expect(scenario).toHaveValue('WEBHOOK_001')
-  const updatedIntent = await page.evaluate(() => JSON.parse(localStorage.getItem('executivepros.frontend.checkout.v1') ?? 'null') as { scenario?: string; key?: string } | null)
+  const updatedIntent = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('executivepros.frontend.checkout.v1') ?? 'null') as {
+        scenario?: string
+        key?: string
+      } | null,
+  )
   expect(updatedIntent).toMatchObject({ scenario: 'WEBHOOK_013', key: pendingIntent?.key })
   await page.getByRole('link', { name: 'View Payment Status' }).first().click()
   await expect(page).toHaveURL(/\/payments$/)
@@ -141,16 +191,27 @@ test('scenario selection excludes client demos and double checkout yields one if
   await expect(page.getByRole('button', { name: 'Demo Client Timeout' })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Demo Double Checkout' })).toBeDisabled()
   await scenario.selectOption('')
-  const checkoutResponses = [0, 1].map(() => page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/v1/cart/checkout'))
+  const checkoutResponses = [0, 1].map(() =>
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && new URL(response.url()).pathname === '/v1/cart/checkout',
+    ),
+  )
   await page.getByRole('button', { name: 'Demo Double Checkout' }).click()
-  const responseBodies = await Promise.all((await Promise.all(checkoutResponses)).map((response) => response.json() as Promise<{ data: { id: number; status: string } }>))
+  const responseBodies = await Promise.all(
+    (await Promise.all(checkoutResponses)).map(
+      (response) => response.json() as Promise<{ data: { id: number; status: string } }>,
+    ),
+  )
   const firstPaymentId = responseBodies[0]?.data.id
   expect(firstPaymentId).toBeDefined()
   expect(responseBodies.map((body) => body.data.id)).toEqual([firstPaymentId, firstPaymentId])
   await expect(page.locator('iframe[title^="Mock payment checkout"]')).toHaveCount(1)
   const checkoutFrame = page.frameLocator('iframe[title^="Mock payment checkout"]')
   await checkoutFrame.getByRole('button', { name: 'Cancel payment' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({
+    timeout: 20_000,
+  })
   await page.getByRole('button', { name: 'Demo SSE Disconnect' }).click()
   await expect(page.getByText('Updates disconnected.')).toBeVisible()
   await page.getByRole('button', { name: 'Reconnect Updates' }).click()

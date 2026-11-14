@@ -1,18 +1,27 @@
 import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
-test('notification outbox retries queue failures and records acceptance without changing its stable key', async ({ assert }) => {
+test('notification outbox retries queue failures and records acceptance without changing its stable key', async ({
+  assert,
+}) => {
   const { db, queue, dispatchOutbox } = useApiFixture()
   assert.isDefined(queue)
   assert.isDefined(dispatchOutbox)
   const notificationKey = 'notify_payment_success_outbox_test'
   const payload = {
-    type: 'email', notification_key: notificationKey, to: 'ada.user@example.test',
-    subject: 'Payment successful', text: 'Your payment completed.', payment_reference: 'pay_outbox_test_1234567890',
+    type: 'email',
+    notification_key: notificationKey,
+    to: 'ada.user@example.test',
+    subject: 'Payment successful',
+    text: 'Your payment completed.',
+    payment_reference: 'pay_outbox_test_1234567890',
   }
   const [id] = await db('notification_outbox').insert({
-    queue_job_key: notificationKey, notification_type: 'payment_success', recipient: payload.to,
-    payload: JSON.stringify(payload), next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+    queue_job_key: notificationKey,
+    notification_type: 'payment_success',
+    recipient: payload.to,
+    payload: JSON.stringify(payload),
+    next_attempt_at: new Date(Date.now() - 1000).toISOString(),
   })
 
   queue!.responseStatus = 503
@@ -28,7 +37,9 @@ test('notification outbox retries queue failures and records acceptance without 
   assert.match(queue!.requests[0]!.requestId, /^outbox:\d+:1$/)
 
   queue!.responseStatus = 202
-  await db('notification_outbox').where({ id }).update({ next_attempt_at: new Date(Date.now() - 1000).toISOString() })
+  await db('notification_outbox')
+    .where({ id })
+    .update({ next_attempt_at: new Date(Date.now() - 1000).toISOString() })
   await dispatchOutbox!()
   row = await db('notification_outbox').where({ id }).first()
   assert.equal(row.attempts, 2)

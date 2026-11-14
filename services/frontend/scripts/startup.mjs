@@ -1,12 +1,36 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 
+/**
+ * Validates and normalizes a browser-facing service origin from the environment.
+ *
+ * @param {string} key - Environment variable containing the origin.
+ * @returns {string} The normalized HTTP or HTTPS origin.
+ * @throws {Error} When the value is missing or is not a browser-reachable origin.
+ */
 function origin(key) {
   const value = process.env[key]
-  if (typeof value !== 'string' || value === '') throw new Error(`${key} is required`)
+  if (typeof value !== 'string' || value === '') {
+    throw new Error(`${key} is required`)
+  }
   let parsed
-  try { parsed = new URL(value) } catch { throw new Error(`${key} must be a browser-reachable HTTP(S) origin`) }
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) throw new Error(`${key} must be an origin without credentials, path, query or fragment`)
-  if (['api', 'provider', 'docs', 'frontend', 'queue', 'mailpit'].includes(parsed.hostname)) throw new Error(`${key} must not use a Compose-only service name`)
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error(`${key} must be a browser-reachable HTTP(S) origin`)
+  }
+  if (
+    !['http:', 'https:'].includes(parsed.protocol) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== '/' ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error(`${key} must be an origin without credentials, path, query or fragment`)
+  }
+  if (['api', 'provider', 'docs', 'frontend', 'queue', 'mailpit'].includes(parsed.hostname)) {
+    throw new Error(`${key} must not use a Compose-only service name`)
+  }
   return parsed.origin
 }
 
@@ -26,13 +50,18 @@ await mkdir(`${tempRoot}/fastcgi_temp`, { recursive: true })
 await mkdir(`${tempRoot}/uwsgi_temp`, { recursive: true })
 await mkdir(`${tempRoot}/scgi_temp`, { recursive: true })
 await writeFile(jsonPath, `${JSON.stringify(config)}\n`, { mode: 0o644 })
-await writeFile(headersPath, [
-  `add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${config.API_ORIGIN}; frame-src ${config.PROVIDER_ORIGIN}" always;`,
-  'add_header X-Content-Type-Options nosniff always;',
-  'add_header Referrer-Policy no-referrer always;',
-  'add_header X-Frame-Options DENY always;',
-].join('\n') + '\n')
-  await writeFile(nginxPath, `worker_processes 1;
+await writeFile(
+  headersPath,
+  [
+    `add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${config.API_ORIGIN}; frame-src ${config.PROVIDER_ORIGIN}" always;`,
+    'add_header X-Content-Type-Options nosniff always;',
+    'add_header Referrer-Policy no-referrer always;',
+    'add_header X-Frame-Options DENY always;',
+  ].join('\n') + '\n',
+)
+await writeFile(
+  nginxPath,
+  `worker_processes 1;
 daemon off;
 pid /tmp/nginx.pid;
 error_log stderr warn;
@@ -61,4 +90,5 @@ http {
     location / { include ${headersPath}; add_header Cache-Control no-store always; try_files $uri $uri/ /index.html; }
   }
 }
-`)
+`,
+)

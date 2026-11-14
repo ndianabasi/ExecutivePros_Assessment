@@ -1,7 +1,10 @@
 import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
-test('public OpenAPI document declares the configured server, auth boundaries, SSE, and no manual payment status route', async ({ assert, client }) => {
+test('public OpenAPI document declares the configured server, auth boundaries, SSE, and no manual payment status route', async ({
+  assert,
+  client,
+}) => {
   const { config } = useApiFixture()
   const response = await client.get('/v1/api_docs.json')
   assert.equal(response.status(), 200)
@@ -21,7 +24,8 @@ test('public OpenAPI document declares the configured server, auth boundaries, S
   const allowedHeaders = browserRequest.headers()['access-control-allow-headers'] ?? ''
   assert.include(allowedHeaders.toLowerCase(), 'authorization')
   assert.include(allowedHeaders.toLowerCase(), 'idempotency-key')
-  const preflight = await client.options('/v1/cart/checkout')
+  const preflight = await client
+    .options('/v1/cart/checkout')
     .header('Origin', config.docsOrigin)
     .header('Access-Control-Request-Method', 'POST')
     .header('Access-Control-Request-Headers', 'authorization,content-type,idempotency-key')

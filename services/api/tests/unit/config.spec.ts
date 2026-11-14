@@ -31,7 +31,9 @@ test('rejects secret values supplied both directly and by file', ({ assert }) =>
   assert.throws(() => loadConfig({ ...validConfig, PROVIDER_WEBHOOK_SECRET_FILE: '/secret' }))
 })
 
-test('rejects direct secrets outside test mode and database paths escaping the mounted data directory', ({ assert }) => {
+test('rejects direct secrets outside test mode and database paths escaping the mounted data directory', ({
+  assert,
+}) => {
   assert.throws(() => loadConfig({ ...validConfig, NODE_ENV: 'production' }))
   assert.throws(() => loadConfig({ ...validConfig, API_DB_PATH: '/data/../etc/api.db' }))
 })
