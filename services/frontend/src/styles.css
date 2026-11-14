@@ -4,5 +4,8 @@
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select { font: inherit; }
 a { color: inherit; }
+button:not(:disabled), a[href], select:not(:disabled), summary, [role="button"]:not([aria-disabled="true"]), [role="link"]:not([aria-disabled="true"]) { cursor: pointer; }
+button:disabled, select:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+label { cursor: pointer; }
 *:focus-visible { outline-color: #0369a1; }
 .config-error { max-width: 40rem; margin: 10vh auto; padding: 2rem; border: 1px solid #fda4af; border-radius: 1rem; background: #fff1f2; color: #881337; }

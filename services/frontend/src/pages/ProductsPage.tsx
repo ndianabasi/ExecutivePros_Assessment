@@ -10,6 +10,7 @@ import { checkoutKey, useSession } from '../session'
 
 interface Intent { user_id: number; cart_id: number | null; scenario: string | null; key: string; payment_id?: number; reference?: string }
 interface CheckoutResponse { id: number; reference: string; status: PaymentSummary['status']; amount_minor: number; currency: string; payment_url: string | null; failure_scenario_code?: string | null; initialisation_state?: string }
+const paymentDialogSeenKey = 'executivepros.frontend.payment-dialog-seen.v1'
 
 function storedIntent(userId: number): Intent | null {
   try {
@@ -19,6 +20,14 @@ function storedIntent(userId: number): Intent | null {
     if (row.user_id !== userId || typeof row.key !== 'string' || row.key.length < 8 || !(row.cart_id === null || Number.isSafeInteger(row.cart_id))) return null
     return row as unknown as Intent
   } catch { localStorage.removeItem(checkoutKey); return null }
+}
+
+function hasSeenPaymentDialog(userId: number, paymentId: number) {
+  try { return sessionStorage.getItem(paymentDialogSeenKey) === `${userId}:${paymentId}` } catch { return false }
+}
+
+function rememberPaymentDialog(userId: number, paymentId: number) {
+  try { sessionStorage.setItem(paymentDialogSeenKey, `${userId}:${paymentId}`) } catch { /* Best-effort tab-local reload protection. */ }
 }
 
 function makeKey() { return crypto.randomUUID() }
@@ -41,7 +50,11 @@ export function ProductsPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [activePayment, setActivePayment] = useState<ActivePayment | null>(null)
-  const [dismissedPaymentId, setDismissedPaymentId] = useState<number | null>(null)
+  const [dismissedPaymentId, setDismissedPaymentId] = useState<number | null>(() => {
+    if (!identity) return null
+    const saved = storedIntent(identity.user.id)
+    return saved?.payment_id && hasSeenPaymentDialog(identity.user.id, saved.payment_id) ? saved.payment_id : null
+  })
   const [lastPayment, setLastPayment] = useState<Pick<PaymentSummary, 'id' | 'reference' | 'status'> | null>(null)
   const [responses, setResponses] = useState<string[]>([])
   const abort = useRef<AbortController | null>(null)
@@ -81,17 +94,20 @@ export function ProductsPage() {
   }, [intent?.scenario])
 
   useEffect(() => {
-    if (!intent?.payment_id || activePayment || dismissedPaymentId === intent.payment_id) return
+    const paymentId = intent?.payment_id
+    if (!paymentId || !identity || activePayment || dismissedPaymentId === paymentId || hasSeenPaymentDialog(identity.user.id, paymentId)) return
     const controller = new AbortController()
-    api.get<PaymentDetail>(`/v1/payments/${intent.payment_id}`, { signal: controller.signal })
+    api.get<PaymentDetail>(`/v1/payments/${paymentId}`, { signal: controller.signal })
       .then((payment) => {
         if (payment.status === 'pending' && payment.payment_url && isProviderUrl(payment.payment_url, config.PROVIDER_ORIGIN)) {
+          rememberPaymentDialog(identity.user.id, payment.id)
+          setDismissedPaymentId(payment.id)
           setActivePayment({ id: payment.id, reference: payment.reference, url: payment.payment_url })
         }
       })
       .catch(() => undefined)
     return () => controller.abort()
-  }, [activePayment, api, config.PROVIDER_ORIGIN, dismissedPaymentId, intent?.payment_id])
+  }, [activePayment, api, config.PROVIDER_ORIGIN, dismissedPaymentId, identity, intent?.payment_id])
 
   async function add(product: Product) {
     const count = quantity[product.id] ?? 1
@@ -167,6 +183,8 @@ export function ProductsPage() {
           setActivePayment(null)
           setNotice(`Payment ${data.reference} is confirmed successful by the API.`)
         } else if (data.payment_url && isProviderUrl(data.payment_url, config.PROVIDER_ORIGIN)) {
+          rememberPaymentDialog(identity.user.id, data.id)
+          setDismissedPaymentId(data.id)
           setActivePayment({ id: data.id, reference: data.reference, url: data.payment_url })
           setNotice('Payment is ready in the secure mock-provider dialog.')
         } else {
@@ -201,7 +219,11 @@ export function ProductsPage() {
     const first = results.find((result): result is CheckoutResponse => Boolean(result))
     if (first) {
       const data = await api.get<PaymentDetail>(`/v1/payments/${first.id}`)
-      if (data.payment_url && isProviderUrl(data.payment_url, config.PROVIDER_ORIGIN)) setActivePayment({ id: data.id, reference: data.reference, url: data.payment_url })
+      if (identity && data.payment_url && isProviderUrl(data.payment_url, config.PROVIDER_ORIGIN)) {
+        rememberPaymentDialog(identity.user.id, data.id)
+        setDismissedPaymentId(data.id)
+        setActivePayment({ id: data.id, reference: data.reference, url: data.payment_url })
+      }
     }
     await refresh().catch(() => undefined)
   }
@@ -234,11 +256,12 @@ export function ProductsPage() {
   const onProviderHint = useCallback((reference: string) => {
     const current = activePayment
     if (!current || current.reference !== reference) return
+    if (identity) rememberPaymentDialog(identity.user.id, current.id)
     setDismissedPaymentId(current.id)
     setActivePayment(null)
     setNotice('Provider finished. Confirming payment status with the API…')
     void refreshPayment(current.id)
-  }, [activePayment, refreshPayment])
+  }, [activePayment, identity, refreshPayment])
 
   const totalPages = Math.max(1, Math.ceil(meta.total / meta.page_size))
   const latestPayment = useMemo(() => cart?.payments?.[0], [cart])
@@ -303,6 +326,12 @@ export function ProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3"><div><CardHeading>Live Payment Updates</CardHeading><p aria-live="polite">{connection === 'connected' ? 'Connected to API events.' : connection === 'connecting' ? 'Connecting…' : 'Updates disconnected.'}</p></div>{connection === 'connected' ? <Button variant="outline" onClick={disconnect}>Demo SSE Disconnect</Button> : <Button variant="outline" onClick={reconnect}>Reconnect Updates</Button>}</div>
     </Card>
 
-    <PaymentDialog payment={activePayment} providerOrigin={config.PROVIDER_ORIGIN} onClose={() => { if (activePayment) setDismissedPaymentId(activePayment.id); setActivePayment(null) }} onFinished={onProviderHint} />
+    <PaymentDialog payment={activePayment} providerOrigin={config.PROVIDER_ORIGIN} onClose={() => {
+      if (activePayment && identity) {
+        rememberPaymentDialog(identity.user.id, activePayment.id)
+        setDismissedPaymentId(activePayment.id)
+      }
+      setActivePayment(null)
+    }} onFinished={onProviderHint} />
   </div>
 }

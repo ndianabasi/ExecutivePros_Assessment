@@ -28,7 +28,8 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - [x] Add a global **Switch user** action; close iframe, abort requests, close SSE, clear displayed state and prior pending checkout key, and best-effort revoke the old token via `POST /v1/logout`.
 - [x] Clear old credentials even when logout fails; show the seeded-user selector for the new session.
 - [x] Show current user's name/role and navigation to products/payments in a responsive shared shell.
-- [x] Add global new-tab links to the configured API Documentation Service and Mailpit UI using `noopener`/`noreferrer`.
+- [x] Add global new-tab links to the configured API Documentation Service and Mailpit UI using `noopener`/`noreferrer`, labelled `API Docs` and `Emails`.
+- [x] Use pointer cursors for enabled buttons, links, selects, labels, and ARIA click targets; disabled controls show a not-allowed cursor.
 - [x] Omit a separate logout button; use Switch user for this demo.
 - [x] Treat role-based UI presentation as convenience only; rely on API authorization for protected data and actions.
 
@@ -53,6 +54,7 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - [x] Generate a cryptographically random `Idempotency-Key` when starting a checkout attempt.
 - [x] Store the current user/cart/scenario/key as a pending intent in local storage before sending checkout.
 - [x] Keep scenario selection available while an attempt is pending, preserve its saved key/scenario for same-attempt retries, and link to Payments for status review.
+- [x] Remember the payment dialog already shown in the current tab; prevent a pending payment dialog from reopening after page reload while retaining explicit detail-page access and new-attempt checkout.
 - [x] Reuse the stored key after a timeout, abort, or uncertain HTTP result; generate a new key only for an API-confirmed new attempt after failure/cancellation.
 - [x] Guard ordinary checkout controls against repeated clicks, apart from the explicit double-checkout demo.
 - [x] Handle `201` new ready, `200` existing/replayed ready, and `202` unresolved provider initialization responses.
@@ -168,6 +170,7 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - Real browser command passed: `FRONTEND_TEST_URL=http://127.0.0.1:18180 yarn workspace @executivepros/frontend test:e2e` — 6 tests passed against the isolated `frontend-e2e` project. It covered success, provider-confirmed failure/cancellation and retry, delayed-response same-key timeout recovery, two concurrent checkout responses returning one payment ID, scenario/client-demo exclusivity, SSE disconnect/reconnect, user switching, admin payment reads, and docs/Mailpit links.
 - 2026-11-14: added and passed a real Compose Playwright regression for `WEBHOOK_013`. Provider completion sends a hint while the API remains pending; the storefront closes and keeps the same dialog closed instead of reopening the terminal provider page repeatedly. Updated `e2e-restore-2` browser suite passes 7/7; frontend lint, typecheck, unit (13), integration (7), and build pass.
 - 2026-11-14: while `WEBHOOK_013` leaves the API status pending, the failure-scenario selector stays enabled, the pending attempt's saved scenario/key remain unchanged, and a direct Payments link opens the pending row. Frontend Playwright on updated isolated project `e2e-restore-3` passes 7/7; lint, typecheck, unit (13), integration (7), and build pass.
+- 2026-11-14: persist the shown payment ID in tab session storage so a reload does not reopen its still-pending provider dialog; explicit retry for a new payment still opens its checkout. Playwright verifies reload status, payment detail access, retries, and pointer cursors (7/7). Lint, typecheck, unit (13), integration (7), and build pass.
 - Isolated frontend image built from pinned Node/Alpine stages; container ran as `10005:10005` with read-only root and passed health. `config.json`, root, `/products`, and `/payments/:id` returned 200; HTML/config were `no-store`; the hashed JS asset used immutable caching. Runtime origins, strict CSP, API CORS, provider `frame-ancestors` without `X-Frame-Options`, and browser connectivity were verified on host-loopback ports `18180`–`18183` and `18125`.
 - Remaining frontend acceptance: deterministic `202` without URL/recovery, invalid or blocked iframe/new-tab fallback, spoofed/malformed message rejection, token-expiry and API/stock outage browser flows, exhaustive cart CRUD/pagination and accessibility/responsive evidence, and rollback rehearsal. Keep the corresponding aggregate test/recovery/rollback tasks unchecked until verified.
 - The browser run used disposable named volumes in Compose project `frontend-e2e`. Do not substitute the normal assessment project or its database for future browser tests.
