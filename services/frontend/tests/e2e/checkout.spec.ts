@@ -88,6 +88,24 @@ test('client timeout exposes the saved-key retry for an uncertain checkout', asy
   await expect(page.getByRole('status').filter({ hasText: 'cancelled' }).first()).toBeVisible({ timeout: 20_000 })
 })
 
+test('invalid provider signature does not reopen the completed checkout dialog in a loop', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('User').selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Select user' }).click()
+  await expect(page).toHaveURL(/\/products$/)
+  await page.getByRole('button', { name: 'Add to cart' }).first().click()
+  await page.getByLabel('Provider scenario').selectOption('WEBHOOK_013')
+  await page.getByRole('button', { name: 'Checkout', exact: true }).click()
+  const checkoutFrame = page.frameLocator('iframe[title^="Mock payment checkout"]')
+  await expect(checkoutFrame.getByRole('heading', { name: 'Mock payment checkout' })).toBeVisible()
+  await checkoutFrame.getByRole('button', { name: 'Pay successfully' }).click()
+  await expect(page.getByRole('dialog')).toBeHidden({ timeout: 20_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'pending' }).first()).toBeVisible({ timeout: 10_000 })
+  await page.waitForTimeout(5_000)
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.locator('iframe[title^="Mock payment checkout"]')).toHaveCount(0)
+})
+
 test('scenario selection excludes client demos and double checkout yields one iframe', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('User').selectOption({ index: 2 })

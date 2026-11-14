@@ -41,6 +41,7 @@ export function ProductsPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [activePayment, setActivePayment] = useState<ActivePayment | null>(null)
+  const [dismissedPaymentId, setDismissedPaymentId] = useState<number | null>(null)
   const [lastPayment, setLastPayment] = useState<Pick<PaymentSummary, 'id' | 'reference' | 'status'> | null>(null)
   const [responses, setResponses] = useState<string[]>([])
   const abort = useRef<AbortController | null>(null)
@@ -80,7 +81,7 @@ export function ProductsPage() {
   }, [intent?.scenario])
 
   useEffect(() => {
-    if (!intent?.payment_id || activePayment) return
+    if (!intent?.payment_id || activePayment || dismissedPaymentId === intent.payment_id) return
     const controller = new AbortController()
     api.get<PaymentDetail>(`/v1/payments/${intent.payment_id}`, { signal: controller.signal })
       .then((payment) => {
@@ -90,7 +91,7 @@ export function ProductsPage() {
       })
       .catch(() => undefined)
     return () => controller.abort()
-  }, [activePayment, api, config.PROVIDER_ORIGIN, intent?.payment_id])
+  }, [activePayment, api, config.PROVIDER_ORIGIN, dismissedPaymentId, intent?.payment_id])
 
   async function add(product: Product) {
     const count = quantity[product.id] ?? 1
@@ -232,8 +233,9 @@ export function ProductsPage() {
 
   const onProviderHint = useCallback((reference: string) => {
     const current = activePayment
-    setActivePayment(null)
     if (!current || current.reference !== reference) return
+    setDismissedPaymentId(current.id)
+    setActivePayment(null)
     setNotice('Provider finished. Confirming payment status with the API…')
     void refreshPayment(current.id)
   }, [activePayment, refreshPayment])
@@ -301,6 +303,6 @@ export function ProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3"><div><CardHeading>Live payment updates</CardHeading><p aria-live="polite">{connection === 'connected' ? 'Connected to API events.' : connection === 'connecting' ? 'Connecting…' : 'Updates disconnected.'}</p></div>{connection === 'connected' ? <Button variant="outline" onClick={disconnect}>Demo SSE disconnect</Button> : <Button variant="outline" onClick={reconnect}>Reconnect updates</Button>}</div>
     </Card>
 
-    <PaymentDialog payment={activePayment} providerOrigin={config.PROVIDER_ORIGIN} onClose={() => setActivePayment(null)} onFinished={onProviderHint} />
+    <PaymentDialog payment={activePayment} providerOrigin={config.PROVIDER_ORIGIN} onClose={() => { if (activePayment) setDismissedPaymentId(activePayment.id); setActivePayment(null) }} onFinished={onProviderHint} />
   </div>
 }

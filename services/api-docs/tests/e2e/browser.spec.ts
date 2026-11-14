@@ -186,6 +186,34 @@ test('container HTTP headers and live configuration are verified in browser cont
   expect(html.headers()['content-security-policy']).toContain("script-src 'self'")
 })
 
+test('seeded-user discovery shows an actionable error and populates the picker on retry', async ({ page }) => {
+  let unavailable = true
+  await page.route(`${apiOrigin}/v1/demo/users`, async route => {
+    if (unavailable) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'unavailable' } }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [
+      { id: 1, first_name: 'Assessment', last_name: 'User', role: 'user' },
+      { id: 2, first_name: 'Assessment', last_name: 'Admin', role: 'admin' },
+    ] }) })
+  })
+  await page.goto(docsUrl)
+  await expect(page.locator('.toolbar .control-card')).toHaveCount(3)
+  await expect(page.getByRole('heading', { name: 'Choose an API identity' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare checkout' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'API reference' })).toBeVisible()
+  await expect(page.locator('#status')).toHaveText('Live API specification loaded.')
+  await expect(page.locator('#user-state')).toContainText('Retry user discovery')
+  await expect(page.locator('#seeded-user')).toBeDisabled()
+  unavailable = false
+  await page.getByRole('button', { name: 'Retry user discovery' }).click()
+  await expect(page.locator('#user-state')).toContainText('2 seeded users are available.')
+  await expect(page.locator('#seeded-user option')).toHaveCount(3)
+  await expect(page.locator('#seeded-user')).toBeEnabled()
+  await page.locator('#seeded-user').selectOption('1')
+  await expect(page.getByRole('button', { name: 'Select user' })).toBeEnabled()
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test('deployed Swagger Try it out calls the configured live API directly', async ({ page }) => {
   test.skip(!liveApiOrigin, 'Set LIVE_API_ORIGIN to enable the isolated Compose contract smoke')
   await page.goto(docsUrl)

@@ -10,14 +10,14 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - [x] Use one Dockerfile and one non-root static-serving container for the documentation service.
 - [x] Keep API endpoint behavior, OpenAPI content, authentication policy, CORS, and payment state owned by the API Service.
 - [x] Add no documentation-service database, migration, payment processor, webhook signer, API proxy, or server-side user session.
-- [ ] Keep the Frontend Service responsible for the new-tab link to this service's browser-reachable docs origin.
+- [x] Keep the Frontend Service responsible for the new-tab link to this service's browser-reachable docs origin.
 - [x] Do not ship a stale bundled OpenAPI document as a fallback.
 
 ## 2. Runtime configuration and live specification
 
 - [x] Validate `API_ORIGIN` at container startup as an absolute browser-reachable HTTP(S) origin; refuse invalid or missing configuration.
 - [x] Generate public `/config.json` containing only `API_ORIGIN`, with no Compose-only DNS name, token, secret, or personal data.
-- [ ] Publish the docs UI on trusted host loopback and align the frontend's `DOCS_ORIGIN` with that browser URL.
+- [x] Publish the docs UI on trusted host loopback and align the frontend's `DOCS_ORIGIN` with that browser URL.
 - [x] Fetch `/config.json` with `cache: 'no-store'` before mounting Swagger UI.
 - [x] Serve HTML and runtime config without stale caching; allow versioned JS/CSS assets to use immutable caching.
 - [x] On first page load, fetch `${API_ORIGIN}/v1/api_docs.json` directly in the browser with `cache: 'no-store'`.
@@ -90,7 +90,7 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 
 - [x] **Static/build:** lint, strict typecheck, asset build, exact Swagger UI package/lockfile, no committed secrets, custom Alpine/Nginx image build, and non-root start pass.
 - [x] **Runtime config:** missing, malformed, non-HTTP(S), or Compose-only API origin fails startup; valid `/config.json` is public/no-store and contains no credential.
-- [ ] **Frontend link:** configured `DOCS_ORIGIN` opens the host-local docs UI in a new browser tab.
+- [x] **Frontend link:** configured `DOCS_ORIGIN` opens the host-local docs UI in a new browser tab.
 - [x] **Live spec:** browser fetches public `/v1/api_docs.json` fresh on load and refresh; API outage/recovery never serves a stale spec as current.
 - [x] **Spec failures:** bad JSON, unsupported/missing OpenAPI data, CORS denial, absent/relative/wrong-origin servers, and external references block Try it out with clear retry/config errors.
 - [x] **API contract:** live spec covers public/protected routes, HTTP Bearer, HMAC-only webhook, required checkout header, request/response examples, and browser API origin; examples match real responses.
@@ -110,13 +110,13 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 
 ## 8. Deployment gates — complete in order
 
-- [ ] **D1 Configuration:** validate browser `API_ORIGIN`, host-local docs binding, frontend `DOCS_ORIGIN`, API CORS origin, and required `Authorization`, `Content-Type`, and `Idempotency-Key` headers/methods.
-- [ ] **D1 Origin safety:** verify runtime config has no secrets and the live spec has no arbitrary or mismatched server URL.
+- [x] **D1 Configuration:** validate browser `API_ORIGIN`, host-local docs binding, frontend `DOCS_ORIGIN`, API CORS origin, and required `Authorization`, `Content-Type`, and `Idempotency-Key` headers/methods.
+- [x] **D1 Origin safety:** verify runtime config has no secrets and the live spec has no arbitrary or mismatched server URL.
 - [x] **D2 Asset build:** pin/review Swagger UI and Alpine versions/digests; reproduce Yarn install/build; copy only required static assets into the runtime image.
 - [x] **D2 Runtime image:** use a single multi-stage Dockerfile, exact `alpine:3.24.4` Nginx runtime, non-root user, unprivileged port, and write access only to config/Nginx temporary paths.
 - [x] **D2 Headers/tests:** verify CSP, no-store HTML/config, immutable versioned assets, valid generated config, and passing static/unit/integration gates.
 - [x] **D3 Container readiness:** start one docs container; verify internal `/health/live` and `/health/ready`, config file, static assets, and host-browser access.
-- [ ] **D3 API connectivity:** verify live OpenAPI fetch and browser CORS; show API outage in the UI without treating static docs container as crashed.
+- [x] **D3 API connectivity:** verify live OpenAPI fetch and browser CORS; show API outage in the UI without treating static docs container as crashed.
 - [ ] **D4 Functional smoke:** open docs from frontend, select user/admin, run protected GET/cart mutation, paste a generated key, complete provider handoff, and inspect API payment.
 - [x] **D5 Recovery smoke:** exercise API/spec outage and restoration, wrong server origin, expired token, and failed switch-user logout.
 - [x] **D5 Security smoke:** verify blocked special-route execution, query-string config override failure, and no external validator/CDN requests or token exposure.
@@ -130,12 +130,12 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - [x] Verify every applicable OpenAPI server URL is absolute and matches browser `API_ORIGIN`.
 - [x] Verify the API spec describes seeded discovery/login/logout, Bearer protection, provider HMAC webhook, required checkout `Idempotency-Key`, response/error shapes, and actual routes without a client status-update route.
 - [x] Verify the API CORS allowlist permits the docs origin and required methods/headers for direct browser requests.
-- [ ] Verify the Frontend Service opens this service's configured `DOCS_ORIGIN` in a new tab.
+- [x] Verify the Frontend Service opens this service's configured `DOCS_ORIGIN` in a new tab.
 
 ## Recorded progress — 2026-11-14
 
-- Passed docs lint, strict typecheck, 7 unit tests, 2 runtime-config integration tests, and production asset build.
+- Passed docs lint, strict typecheck, 7 unit tests, 2 runtime-config integration tests, and production asset build. Updated the three control cards and made user discovery failures visible/retryable without letting successful spec loading hide the problem; the selected-user button now enables only after discovery and a valid choice.
 - Built `executivepros-api-docs:0.1.0` from the pinned Alpine `3.24.4` runtime with Nginx `1.30.6-r0` and Node.js `24.22.3-r0`. Disposable container was healthy and ran as UID/GID `10004:10004`.
-- Passed 3 Playwright Chromium tests against the disposable container, including identity persistence/switching, protected request handling, blocked special routes, checkout-key flow, CORS/spec failure recovery, CSP, no-store headers, narrow viewport, and keyboard focus.
+- Passed 5 Playwright Chromium tests against the rebuilt disposable container, including identity persistence/switching, protected request handling, blocked special routes, checkout-key flow, user-list failure/retry and responsive control layout, live API Try it out, CORS/spec failure recovery, CSP, no-store headers, narrow viewport, and keyboard focus.
 - Passed API typecheck/lint, contract suite (1 test), and integration suite (20 tests), including the live generated OpenAPI examples, no-store response, browser CORS headers, and preflight behavior. `docker compose config --quiet` and `git diff --check` passed.
-- Still open: Frontend Service new-tab link and `DOCS_ORIGIN` alignment, actual API/docs browser connectivity in the full Compose stack, real provider checkout and payment status, complete deployment acceptance, and manual screen-reader review.
+- Still open: full Swagger cart mutation/checkout/provider handoff through docs, complete deployment acceptance, rollback rehearsal, and manual screen-reader review.

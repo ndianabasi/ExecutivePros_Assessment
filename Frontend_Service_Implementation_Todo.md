@@ -130,7 +130,7 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 - [ ] **Accessibility/responsive:** keyboard/screen-reader flow, dialog focus and announcements, contrast, narrow screens, and status outside iframe pass.
 - [ ] **Contract:** frontend requests/responses match API routes; provider framing/message contract and browser origins work; queue email delivery is not described as exactly once.
 - [x] **Compose end-to-end:** login → products/cart → checkout → embedded provider → API-confirmed payment → payment detail passes in a real browser with API-state assertions.
-- [ ] **Compose failure end-to-end:** failed/cancelled retry, provider scenarios, timeout replay, double checkout, SSE disconnect, admin payment view, and docs/Mailpit links pass.
+- [x] **Compose failure end-to-end:** failed/cancelled retry, provider scenarios, timeout replay, double checkout, SSE disconnect, admin payment view, and docs/Mailpit links pass.
 - [ ] Record test commands/results and every skipped or blocked suite; do not treat a passing build alone as frontend acceptance.
 
 ## 10. Deployment gates — complete in order
@@ -165,6 +165,7 @@ Source of truth: [Frontend_Service_Implementation.md](Frontend_Service_Implement
 
 - Static commands passed: `yarn workspace @executivepros/frontend lint`, `typecheck`, `test:unit` (13 tests), `test:integration` (7 tests), and `build`; `git diff --check` passed.
 - Real browser command passed: `FRONTEND_TEST_URL=http://127.0.0.1:18180 yarn workspace @executivepros/frontend test:e2e` — 6 tests passed against the isolated `frontend-e2e` project. It covered success, provider-confirmed failure/cancellation and retry, delayed-response same-key timeout recovery, two concurrent checkout responses returning one payment ID, scenario/client-demo exclusivity, SSE disconnect/reconnect, user switching, admin payment reads, and docs/Mailpit links.
+- 2026-11-14: added and passed a real Compose Playwright regression for `WEBHOOK_013`. Provider completion sends a hint while the API remains pending; the storefront closes and keeps the same dialog closed instead of reopening the terminal provider page repeatedly. Updated `e2e-restore-2` browser suite passes 7/7; frontend lint, typecheck, unit (13), integration (7), and build pass.
 - Isolated frontend image built from pinned Node/Alpine stages; container ran as `10005:10005` with read-only root and passed health. `config.json`, root, `/products`, and `/payments/:id` returned 200; HTML/config were `no-store`; the hashed JS asset used immutable caching. Runtime origins, strict CSP, API CORS, provider `frame-ancestors` without `X-Frame-Options`, and browser connectivity were verified on host-loopback ports `18180`–`18183` and `18125`.
 - Remaining frontend acceptance: deterministic `202` without URL/recovery, invalid or blocked iframe/new-tab fallback, spoofed/malformed message rejection, token-expiry and API/stock outage browser flows, exhaustive cart CRUD/pagination and accessibility/responsive evidence, and rollback rehearsal. Keep the corresponding aggregate test/recovery/rollback tasks unchecked until verified.
 - The browser run used disposable named volumes in Compose project `frontend-e2e`. Do not substitute the normal assessment project or its database for future browser tests.

@@ -20,6 +20,7 @@ const apiBase = document.querySelector<HTMLElement>('#api-state')!
 const loginButton = document.querySelector<HTMLButtonElement>('#select-user')!
 const switchButton = document.querySelector<HTMLButtonElement>('#switch-user')!
 const refreshUsersButton = document.querySelector<HTMLButtonElement>('#refresh-users')!
+const usersState = document.querySelector<HTMLElement>('#user-state')!
 const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-spec')!
 const generateButton = document.querySelector<HTMLButtonElement>('#generate-key')!
 const copyButton = document.querySelector<HTMLButtonElement>('#copy-key')!
@@ -59,6 +60,7 @@ function setIdentity(value: DemoIdentity | null): void {
 function refreshIdentityUI(): void {
   identityLabel.textContent = identity ? `Selected: ${identity.user.name} (${identity.user.role})` : 'No user selected'
   loginButton.hidden = identity !== null
+  loginButton.disabled = identity !== null || selector.disabled || !selector.value
   selector.hidden = identity !== null
   switchButton.hidden = identity === null
   keyField.disabled = identity === null
@@ -74,13 +76,33 @@ async function getJson(url: string): Promise<unknown> {
 }
 
 async function loadUsers(): Promise<void> {
-  selector.replaceChildren(new Option('Choose a seeded user', ''))
-  const result = await getJson(`${apiOrigin}/v1/demo/users`) as { data?: Array<{ id: number; first_name: string; last_name: string; role: string }> }
-  const users = result.data
-  if (!Array.isArray(users)) throw new Error('The API returned an invalid seeded-user list')
-  for (const user of users) {
-    if (!Number.isSafeInteger(user.id) || typeof user.first_name !== 'string' || typeof user.last_name !== 'string' || !['user', 'admin'].includes(user.role)) continue
-    selector.add(new Option(`${user.first_name} ${user.last_name} — ${user.role}`, String(user.id)))
+  const hadChoices = selector.options.length > 1
+  refreshUsersButton.disabled = true
+  usersState.dataset.state = 'loading'
+  usersState.textContent = 'Loading seeded users…'
+  if (!hadChoices) selector.replaceChildren(new Option('Loading seeded users…', ''))
+  selector.disabled = true
+  try {
+    const result = await getJson(`${apiOrigin}/v1/demo/users`) as { data?: Array<{ id: number; first_name: string; last_name: string; role: string }> }
+    if (!Array.isArray(result.data)) throw new Error('The API returned an invalid seeded-user list')
+    const users = result.data.filter(user => Number.isSafeInteger(user.id) && user.id > 0 && typeof user.first_name === 'string' && typeof user.last_name === 'string' && ['user', 'admin'].includes(user.role))
+    if (!users.length) throw new Error('The API returned no active seeded users.')
+    const options = [new Option('Choose a seeded user', ''), ...users.map(user => new Option(`${user.first_name} ${user.last_name} — ${user.role}`, String(user.id)))]
+    selector.replaceChildren(...options)
+    selector.disabled = identity !== null
+    loginButton.disabled = identity !== null || !selector.value
+    usersState.dataset.state = 'ready'
+    usersState.textContent = `${users.length} seeded ${users.length === 1 ? 'user is' : 'users are'} available.`
+  } catch (error) {
+    if (!hadChoices) selector.replaceChildren(new Option('Seeded users unavailable', ''))
+    loginButton.disabled = true
+    usersState.dataset.state = 'error'
+    usersState.textContent = `${error instanceof Error ? error.message : 'Could not load seeded users.'} Use Retry user discovery when the API is ready.`
+    throw error
+  } finally {
+    selector.disabled = identity !== null || selector.options.length <= 1
+    loginButton.disabled = identity !== null || selector.disabled || !selector.value
+    refreshUsersButton.disabled = false
   }
   selector.hidden = identity !== null
 }
@@ -150,6 +172,7 @@ function updateKey(value: string): void {
 
 loginButton.addEventListener('click', () => void selectUser())
 switchButton.addEventListener('click', () => void switchUser())
+selector.addEventListener('change', () => { loginButton.disabled = identity !== null || selector.disabled || !selector.value })
 refreshUsersButton.addEventListener('click', () => void loadUsers().then(() => announce('Seeded-user list refreshed.')).catch(error => announce(error instanceof Error ? error.message : 'Could not refresh seeded users.', true)))
 refreshButton.addEventListener('click', () => void refreshSpec())
 generateButton.addEventListener('click', () => {
