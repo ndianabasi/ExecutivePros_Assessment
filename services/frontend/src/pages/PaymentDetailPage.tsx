@@ -31,6 +31,15 @@ export function PaymentDetailPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(true)
 
+  const activity = payment ? [
+    ...payment.incidents.map((incident) => ({ id: `incident-${incident.id}`, kind: 'Incident', title: incident.code, details: incident.redacted_details ?? 'This case requires review.', timestamp: incident.created_at })),
+    ...payment.reconciliation_attempts.map((attempt) => ({
+      id: `reconciliation-${attempt.id}`, kind: `Provider Lookup · Attempt ${attempt.attempt_number}`,
+      title: attempt.outcome.replaceAll('_', ' '), details: attempt.redacted_details ?? 'Reconciliation is still in progress.',
+      timestamp: attempt.completed_at ?? attempt.started_at,
+    })),
+  ].sort((left, right) => right.timestamp.localeCompare(left.timestamp)) : []
+
   const refresh = useCallback(async () => {
     if (!Number.isSafeInteger(id) || id < 1) { setError('Payment not found.'); setBusy(false); return null }
     setBusy(true)
@@ -76,7 +85,9 @@ export function PaymentDetailPage() {
       </Card>
       <Card><CardHeading>Items</CardHeading><ul className="divide-y divide-slate-200">{payment.cart.items.map((item) => <li key={item.product_id} className="flex justify-between gap-3 py-3"><span>{item.product_name} × {item.quantity}</span><span>{money(item.line_total_minor, item.currency ?? payment.currency)}</span></li>)}</ul></Card>
       <Card><CardHeading>Fulfilment</CardHeading>{payment.fulfillment ? <ul className="divide-y divide-slate-200">{payment.fulfillment.items.map((item) => <li key={item.product_id} className="py-2">{item.product_name} × {item.quantity}</li>)}</ul> : <p>Fulfilment has not been recorded.</p>}</Card>
-      <Card><CardHeading>Attempts and Incidents</CardHeading><p className="text-sm text-slate-600">Cart #{payment.cart_id}</p><ul className="mt-3 divide-y divide-slate-200">{attempts.map((attempt) => <li key={attempt.id} className="flex flex-wrap justify-between gap-2 py-2"><Link className="underline" to={`/payments/${attempt.id}`}>{attempt.reference}</Link><span className="capitalize">{attempt.status}</span></li>)}</ul>{payment.incidents.length ? <ul className="mt-3 list-disc pl-5">{payment.incidents.map((incident) => <li key={incident.id}>{incident.code} — {incident.redacted_details ?? 'This case requires review.'}</li>)}</ul> : <p className="mt-2">No incident is reported for this payment.</p>}</Card>
+      <Card><CardHeading>Attempts and Incidents</CardHeading><p className="text-sm text-slate-600">Cart #{payment.cart_id}</p><ul className="mt-3 divide-y divide-slate-200">{attempts.map((attempt) => <li key={attempt.id} className="flex flex-wrap justify-between gap-2 py-2"><Link className="underline" to={`/payments/${attempt.id}`}>{attempt.reference}</Link><span className="capitalize">{attempt.status}</span></li>)}</ul>
+        {activity.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[42rem] border-collapse text-left text-sm"><thead><tr className="border-b border-slate-300 text-slate-600"><th className="py-2 pr-4 font-semibold">Time</th><th className="py-2 pr-4 font-semibold">Type</th><th className="py-2 pr-4 font-semibold">Result</th><th className="py-2 font-semibold">Details</th></tr></thead><tbody>{activity.map((row) => <tr key={row.id} className="border-b border-slate-200 align-top"><td className="whitespace-nowrap py-3 pr-4">{new Date(row.timestamp).toLocaleString()}</td><td className="py-3 pr-4">{row.kind}</td><td className="py-3 pr-4 capitalize">{row.title}</td><td className="py-3">{row.details}</td></tr>)}</tbody></table></div> : <p className="mt-2">No incidents or provider reconciliation attempts are recorded for this payment.</p>}
+      </Card>
     </>}
   </div>
 }

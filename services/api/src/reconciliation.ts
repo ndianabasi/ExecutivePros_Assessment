@@ -15,6 +15,7 @@ interface Candidate {
   checkout_expires_at: string
   reconcile_attempts: number
   claim_token: string
+  history_id: number
 }
 
 function retryDelay(attempt: number, testMode: boolean): number {
@@ -33,7 +34,7 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     const nowText = now.toISOString()
     const leaseUntil = new Date(now.getTime() + config.providerTimeoutMs + 5000).toISOString()
     return immediate(db, async (tx) => {
-      const due = await tx.query<Omit<Candidate, 'claim_token'>>(
+      const due = await tx.query<Omit<Candidate, 'claim_token' | 'history_id'>>(
         `SELECT id, reference, amount_minor, currency, checkout_expires_at, reconcile_attempts
          FROM payments WHERE status = 'pending'
            AND (reconcile_after IS NULL OR reconcile_after <= :now OR checkout_expires_at <= :now)
@@ -44,14 +45,22 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
       const claimed: Candidate[] = []
       for (const candidate of due) {
         const token = randomUUID()
-        const rows = await tx.query<{ id: number }>(
+        const rows = await tx.query<{ id: number; reconcile_attempts: number }>(
           `UPDATE payments SET reconcile_claim_token = :token, reconcile_lease_until = :lease,
              reconcile_attempts = reconcile_attempts + 1
            WHERE id = :id AND status = 'pending' AND (reconcile_lease_until IS NULL OR reconcile_lease_until <= :now)
-           RETURNING id`,
+           RETURNING id, reconcile_attempts`,
           { token, lease: leaseUntil, id: candidate.id, now: nowText },
         )
-        if (rows.length) claimed.push({ ...candidate, id: Number(candidate.id), reconcile_attempts: Number(candidate.reconcile_attempts) + 1, claim_token: token })
+        if (rows.length) {
+          const attemptNumber = Number(rows[0]!.reconcile_attempts)
+          const history = await tx.query<{ id: number }>(
+            `INSERT INTO payment_reconciliation_attempts(payment_id, attempt_number, started_at)
+             VALUES (:payment_id, :attempt_number, :started_at) RETURNING id`,
+            { payment_id: candidate.id, attempt_number: attemptNumber, started_at: nowText },
+          )
+          claimed.push({ ...candidate, id: Number(candidate.id), reconcile_attempts: attemptNumber, claim_token: token, history_id: Number(history[0]!.id) })
+        }
       }
       return claimed
     }, config.sqliteLockAttempts)
@@ -69,6 +78,15 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     }, config.sqliteLockAttempts)
     if (error) logger.warn({ payment_reference: candidate.reference, attempt: candidate.reconcile_attempts,
       error_type: error instanceof Error ? error.name : 'unknown' }, 'provider payment reconciliation lookup failed')
+  }
+
+  async function finishAttempt(candidate: Candidate, now: Date, outcome: string, details: string, providerStatus?: string) {
+    await db.raw(
+      `UPDATE payment_reconciliation_attempts
+       SET outcome = :outcome, redacted_details = :details, provider_status = :provider_status, completed_at = :completed_at
+       WHERE id = :id AND outcome = 'in_progress'`,
+      { outcome, details, provider_status: providerStatus ?? null, completed_at: now.toISOString(), id: candidate.history_id },
+    )
   }
 
   async function recordExpiryLookupFailure(candidate: Candidate, now: Date, error: unknown) {
@@ -114,10 +132,17 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
           amount: payment.amount, currency: payment.currency,
           ...(payment.provider_reference ? { providerReference: payment.provider_reference } : {}),
         }, eventHub)
+        await finishAttempt(candidate, now, 'amount_currency_mismatch', 'Provider lookup amount or currency did not match the stored payment.', payment.status)
         await schedule(candidate, now)
         return
       }
     } catch (error) {
+      const details = error instanceof ProviderError && error.status === 404
+        ? 'Provider has no status record for this payment yet.'
+        : error instanceof ProviderError && error.status !== undefined
+          ? `Provider status lookup returned HTTP ${error.status}.`
+          : 'Provider status lookup failed or timed out.'
+      await finishAttempt(candidate, now, 'provider_lookup_failed', details)
       if (Date.parse(candidate.checkout_expires_at) <= now.getTime()) {
         await recordExpiryLookupFailure(candidate, now, error)
       } else {
@@ -127,11 +152,15 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     }
 
     if (payment.status !== 'pending') {
-      await applyPaymentEvidence(db, {
+      const transition = await applyPaymentEvidence(db, {
         source: 'reconciliation', evidenceHash: evidenceHash(payment), reference: candidate.reference,
         status: payment.status as TerminalPaymentStatus, amount: payment.amount, currency: payment.currency,
         ...(payment.provider_reference ? { providerReference: payment.provider_reference } : {}),
       }, eventHub)
+      const outcome = transition === 'processed' ? `provider_${payment.status}_reconciled` : `provider_${payment.status}_${transition}`
+      await finishAttempt(candidate, now, outcome, transition === 'processed'
+        ? `Provider status ${payment.status} was verified and applied.`
+        : `Provider status ${payment.status} was received; API transition outcome: ${transition}.`, payment.status)
       await immediate(db, async (tx) => {
         await tx.query('UPDATE payments SET reconcile_claim_token = NULL, reconcile_lease_until = NULL WHERE id = :id AND reconcile_claim_token = :token',
           { id: candidate.id, token: candidate.claim_token })
@@ -140,14 +169,18 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     }
 
     if (Date.parse(candidate.checkout_expires_at) <= now.getTime()) {
-      await expirePendingPayment(db, { paymentId: candidate.id, reference: candidate.reference,
+      const expired = await expirePendingPayment(db, { paymentId: candidate.id, reference: candidate.reference,
         amount: payment.amount, currency: payment.currency, evidenceHash: evidenceHash(payment) }, eventHub)
+      await finishAttempt(candidate, now, expired ? 'provider_pending_expired' : 'provider_pending_review', expired
+        ? 'Provider still reported pending at checkout expiry; API payment was failed and reserved stock released.'
+        : 'Provider still reported pending at checkout expiry, but the API payment needs review.', payment.status)
       await immediate(db, async (tx) => {
         await tx.query('UPDATE payments SET reconcile_claim_token = NULL, reconcile_lease_until = NULL WHERE id = :id AND reconcile_claim_token = :token',
           { id: candidate.id, token: candidate.claim_token })
       }, config.sqliteLockAttempts)
       return
     }
+    await finishAttempt(candidate, now, 'provider_still_pending', 'Provider still reports pending before checkout expiry.', payment.status)
     await schedule(candidate, now)
   }
 
@@ -157,6 +190,7 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
       const candidates = await claim(now)
       await Promise.all(candidates.map((candidate) => process(candidate, now).catch(async (error) => {
         logger.error({ payment_reference: candidate.reference, error_type: error instanceof Error ? error.name : 'unknown' }, 'payment reconciliation processing failed')
+        await finishAttempt(candidate, now, 'reconciliation_processing_failed', 'API could not complete this reconciliation attempt.')
         await schedule(candidate, now, error)
       })))
     })()

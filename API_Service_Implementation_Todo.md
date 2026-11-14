@@ -49,6 +49,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Create `fulfillments` and `fulfillment_items` with unique payment and cart fulfilment constraints and purchased-item snapshots.
 - [x] Create `provider_events` for webhook/reconciliation evidence, unique webhook event ID, payload/response hash, reference, outcome, and timestamps.
 - [x] Create deduplicated `payment_incidents` with trusted reference/payment linkage, redacted details, code, and resolution timestamp.
+- [ ] Persist each provider status lookup as a numbered reconciliation-attempt row with start/completion timestamps, safe outcome details, and provider status; leave interrupted attempts visibly in progress.
 - [x] Create `notification_outbox` with a unique stable queue job key, payload, attempts, next-attempt time, lease, accepted time, and redacted last error.
 - [ ] Add a migration path that safely rebuilds the SQLite carts table if its status check must change.
 - [x] Seed at least one active user, one active admin, and purchasable products; make seeding repeatable without overwriting payments or tokens.
@@ -128,6 +129,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Run bounded periodic scans of due pending payments after the webhook grace period; claim work so overlapping ticks cannot duplicate processing.
 - [x] Query provider status by immutable reference with service authentication, timeout, and response validation for reference/amount/currency.
 - [x] Route provider-confirmed terminal status through the same transactional transition and fulfilment path as a webhook, with distinct evidence provenance.
+- [ ] Return incidents and lookup attempts together in owner/admin payment details; display them as chronological timestamped rows while preserving the original incident after later reconciliation.
 - [x] Reschedule provider-pending or temporarily failed lookups with bounded backoff; never change payment status on an unavailable/ambiguous lookup.
 - [x] At day 30, perform a fresh provider lookup before attempting expiry.
 - [x] If the day-30 provider result is pending, conditionally fail the API payment, release reservations, record notification intents, and log that provider cancellation was not confirmed.

@@ -58,6 +58,10 @@ export function registerPaymentReadRoutes(app: Express, db: Knex) {
       `SELECT id, code, redacted_details, created_at, resolved_at FROM payment_incidents
        WHERE payment_id = :id ORDER BY id DESC`, { id: payment.id },
     ) as Array<Record<string, unknown>>
+    const reconciliationAttempts = await db.raw(
+      `SELECT id, attempt_number, outcome, provider_status, redacted_details, started_at, completed_at
+       FROM payment_reconciliation_attempts WHERE payment_id = :id ORDER BY started_at DESC, id DESC`, { id: payment.id },
+    ) as Array<Record<string, unknown>>
     const safePayment = { ...payment }
     delete safePayment.fulfillment_id
     const fulfilledAt = safePayment.fulfilled_at
@@ -68,6 +72,7 @@ export function registerPaymentReadRoutes(app: Express, db: Knex) {
       cart: { id: payment.cart_id, items },
       fulfillment: payment.fulfillment_id ? { created_at: fulfilledAt, items: fulfillmentItems } : null,
       incidents,
+      reconciliation_attempts: reconciliationAttempts,
     } })
   })
 }

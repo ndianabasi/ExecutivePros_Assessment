@@ -95,4 +95,5 @@ export interface PaymentDetail extends PaymentSummary {
   cart: { id: number; items: CartItem[] }
   fulfillment: { created_at: string; items: CartItem[] } | null
   incidents: Array<{ id: number; code: string; redacted_details?: string; created_at: string; resolved_at?: string | null }>
+  reconciliation_attempts: Array<{ id: number; attempt_number: number; outcome: string; provider_status?: string | null; redacted_details?: string | null; started_at: string; completed_at?: string | null }>
 }
