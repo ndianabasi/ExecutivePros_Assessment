@@ -168,7 +168,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
 - [x] Register Japa assert/API-client plugins centrally, configure the client base URL from `.env.test`, and expose common test helpers through macros in the Japa test context.
 - [x] Use the integration suite before hook to migrate/seed a fresh temporary SQLite file and start HTTP fixtures on distinct high ports from `.env.test` per test; return one cleanup function from the hook. Keep test bodies free of database/server provisioning.
-- [ ] Keep the provider HTTP mock for fast API integration tests, and add an API end-to-end suite that bootstraps the real Mock Payment Provider service in test mode and calls it over HTTP; do not use the provider mock in that suite.
+- [x] Keep the provider HTTP mock for fast API integration tests, and add an API end-to-end suite that bootstraps the real Mock Payment Provider service in test mode and calls it over HTTP; do not use the provider mock in that suite.
 - [ ] Run migration checks in Japa `integration`, provider/queue and OpenAPI checks in `contract`, and real disposable Compose/child-process/proxy recovery checks in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret scan, and OpenAPI validation all pass with zero failures.
 - [ ] **Migration/seed:** fresh `up`, repeatable seed, disposable-data `down` and second `up` pass; real SQLite files prove foreign keys, checks, unique/partial indexes, and schema version.
@@ -216,6 +216,16 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Confirm the frontend sends Bearer tokens and checkout idempotency keys, keeps a key for HTTP retries, uses a new key for a new attempt, opens an Authorization-capable SSE stream, and refetches payment state after reconnect.
 - [ ] Confirm the documentation service can fetch public `/v1/api_docs.json` from its allowed CORS origin and represents Bearer and webhook-HMAC authentication separately.
 - [ ] Block API integration acceptance if any required provider/queue contract is absent; do not compensate by reading another service's database or weakening API invariants.
+
+## 12. Progress and verification record
+
+- Added `tests/e2e/provider-checkout.spec.ts`. The e2e suite creates fresh API/provider SQLite files, runs both services' migrations and seeds, initializes the provider Workmatic tables, launches the provider server as a test-mode child process, then calls it over the host-loopback address from `.env.test`. Fast API integration tests continue to use their small HTTP provider fixture.
+- The passing real-provider e2e flow logs in, creates a cart, checks out with a required key, opens and submits the real provider checkout page, receives duplicate signed `WEBHOOK_001` deliveries, and verifies one API fulfilment, one stock decrement, one notification intent, and provider success through its status endpoint.
+- `yarn workspace @executivepros/api test:e2e`: **passed**, 1 real-provider e2e test.
+- `yarn workspace @executivepros/api test`: **passed**, 16 tests across configured unit, integration, and e2e suites.
+- `yarn workspace @executivepros/api typecheck`: **passed**.
+- `yarn workspace @executivepros/api lint`: **passed**.
+- Remaining for step 5: API queue outbox dispatcher, SSE, scheduled reconciliation and day-30 expiry, OpenAPI endpoint, direct queue integration, provider failure/outage/conflict recovery cases, API Compose image and full Compose gates. Do not treat this provider success-flow test as API payment-path acceptance.
 
 ## Current verification record
 
