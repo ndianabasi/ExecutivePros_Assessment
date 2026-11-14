@@ -92,6 +92,7 @@ async function setupProviderTest(testCase: Test) {
       paymentReference: string
       referenceSignature: string
       requestId: string
+      receivedAt: string
     }>,
     responseStatus: 204,
   }
@@ -133,6 +134,7 @@ async function setupProviderTest(testCase: Test) {
         paymentReference: request.header('x-provider-payment-reference') ?? '',
         referenceSignature: request.header('x-provider-reference-signature') ?? '',
         requestId: request.header('x-request-id') ?? '',
+        receivedAt: new Date().toISOString(),
       })
       response.status(api.responseStatus).end()
     })

@@ -12,6 +12,7 @@ export interface ProviderTestFixture {
       paymentReference: string
       referenceSignature: string
       requestId: string
+      receivedAt: string
     }>
     responseStatus: number
   }

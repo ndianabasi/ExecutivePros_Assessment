@@ -131,6 +131,7 @@ test('initialization delay is absent to lookup until one immutable payment is co
 }) => {
   const fixture = await useProviderFixture()
   const request = input('PROVIDER_001')
+  const startedAt = Date.now()
   const initPromise = fetch(`http://127.0.0.1:${fixture.providerPort}/payments/initialise`, {
     method: 'POST',
     headers: { authorization: auth(fixture.config.serviceSecret), 'content-type': 'application/json' },
@@ -140,6 +141,7 @@ test('initialization delay is absent to lookup until one immutable payment is co
   assert.isUndefined(await fixture.db('payments').where({ reference: request.reference }).first())
   const completed = await initPromise
   assert.equal(completed.status, 201)
+  assert.isAtLeast(Date.now() - startedAt, fixture.config.initDelayMs)
   assert.equal(
     await fixture
       .db('payments')
@@ -268,6 +270,13 @@ test('scenario snapshots preserve skipped, duplicated, delayed, and conflicting 
   const delayed = await pay(client, fixture, 'WEBHOOK_003')
   await submit(fixture, delayed.data.payment_url)
   await waitFor(async () => fixture.api.received.length === 6)
+  const delayedPayment = await fixture.db('payments').where({ reference: delayed.data.reference }).first()
+  const delayedEvent = await fixture.db('webhook_events').where({ payment_id: delayedPayment.id }).first()
+  assert.isAtLeast(
+    Date.parse(fixture.api.received[5]!.receivedAt),
+    Date.parse(delayedEvent.due_at),
+    'delayed webhook should not be delivered before its persisted due time',
+  )
 
   const payOnly = await pay(client, fixture, 'WEBHOOK_008')
   const payPage = await fetch(payOnly.data.payment_url)
@@ -277,6 +286,68 @@ test('scenario snapshots preserve skipped, duplicated, delayed, and conflicting 
   await waitFor(async () => fixture.api.received.length === 8)
   assert.equal(JSON.parse(fixture.api.received[6]!.body.toString()).status, 'success')
   assert.equal(JSON.parse(fixture.api.received[7]!.body.toString()).status, 'failed')
+  const conflictingEventIds = fixture.api.received.slice(6, 8).map((submission) => {
+    return JSON.parse(submission.body.toString()).event_id as string
+  })
+  const conflictingEvents = await fixture
+    .db('webhook_events')
+    .whereIn('event_id', conflictingEventIds)
+    .orderBy('created_at', 'asc')
+  assert.equal(conflictingEvents.length, 2)
+  assert.equal(conflictingEvents[0]!.status, 'delivered')
+  assert.equal(conflictingEvents[1]!.status, 'delivered')
+  assert.isAtMost(
+    Date.parse(conflictingEvents[0]!.delivered_at),
+    Date.parse(conflictingEvents[1]!.created_at),
+  )
+})
+
+test('scenario catalogue is sorted and reseeding preserves each initialized payment snapshot', async ({
+  assert,
+  client,
+}) => {
+  const fixture = await useProviderFixture()
+  const catalogue = await client
+    .get('/failure-scenarios')
+    .header('Authorization', auth(fixture.config.serviceSecret))
+  const codes = catalogue.body().data.map((scenario: { code: string }) => scenario.code)
+  assert.deepEqual(codes, [...codes].sort())
+
+  const initialized = await pay(client, fixture, 'WEBHOOK_003')
+  const paymentBeforeReseed = await fixture
+    .db('payments')
+    .where({ reference: initialized.data.reference })
+    .first()
+  const snapshotBeforeReseed = paymentBeforeReseed.scenario_snapshot
+  await fixture.db('failure_scenarios').where({ code: 'WEBHOOK_003' }).update({ is_active: 0 })
+
+  const inactiveCatalogue = await client
+    .get('/failure-scenarios')
+    .header('Authorization', auth(fixture.config.serviceSecret))
+  assert.equal(inactiveCatalogue.body().data.length, 9)
+  assert.isFalse(
+    inactiveCatalogue.body().data.some((scenario: { code: string }) => scenario.code === 'WEBHOOK_003'),
+  )
+
+  await fixture.db.seed.run()
+
+  const paymentAfterReseed = await fixture
+    .db('payments')
+    .where({ reference: initialized.data.reference })
+    .first()
+  const activeScenarios = await fixture.db('failure_scenarios').where({ is_active: 1 }).count({
+    count: '*',
+  })
+  const restoredCatalogue = await client
+    .get('/failure-scenarios')
+    .header('Authorization', auth(fixture.config.serviceSecret))
+  assert.equal(paymentAfterReseed.scenario_snapshot, snapshotBeforeReseed)
+  assert.equal(JSON.parse(paymentAfterReseed.scenario_snapshot).config.delay_ms, 15000)
+  assert.equal(Number(activeScenarios[0]?.count), 10)
+  assert.deepEqual(
+    restoredCatalogue.body().data.map((scenario: { code: string }) => scenario.code),
+    codes,
+  )
 })
 
 test('tampered-body and bad-signature scenarios preserve canonical outcome and transmitted evidence', async ({

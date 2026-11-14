@@ -148,8 +148,8 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [ ] **Webhook retries:** 2xx stops, retryable network/timeout/5xx/408/429 gets five rounds with 2/4/8/16-second delays, permanent 4xx stops, and exhaustion remains inspectable.
 - [ ] **Attempt accounting:** every HTTP submission, including concurrent duplicates and replay, has a distinct number and bounded/redacted response evidence.
 - [x] **Event states:** `delivered`, `failed`, and `skipped` match actual delivery outcomes and are independent of provider payment status and Workmatic done/dead.
-- [ ] **Scenario matrix:** all ten seeded codes produce their specified timing, duplicate count/order, skip, conflict, amount change, signature, or malformed-body behavior.
-- [ ] **Catalogue/snapshot:** only active scenarios are returned in stable order and reseeding does not change a payment's behavior.
+- [x] **Scenario matrix:** all ten seeded codes produce their specified timing, duplicate count/order, skip, conflict, amount change, signature, or malformed-body behavior.
+- [x] **Catalogue/snapshot:** only active scenarios are returned in stable order and reseeding does not change a payment's behavior.
 - [ ] **Compose end-to-end:** real frontend/API/provider success, failure, cancellation, iframe/new-tab flow, duplicate webhook with one fulfilment, missing/bad webhook reconciliation, and conflict incident pass.
 - [ ] **Recovery end-to-end:** provider/API outage, timeout, dropped response, restart, expired checkout, and isolated late-success discrepancy fixture preserve the agreed states.
 - [ ] Assert provider and API database state, Workmatic job state, webhook attempts, browser result, and structured logs rather than only HTTP codes.
@@ -189,6 +189,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 ## 12. Progress and verification record
 
 - `yarn workspace @executivepros/provider test`: **passed**, 10 tests across unit, integration, and contract suites. The first run exposed two assertions reading event rows before the worker committed their terminal status; assertions now wait for persisted state before checking it.
+- Expanded the provider Japa scenarios to assert initialization delay, delayed delivery no earlier than its persisted due time, concurrent/sequential duplicate counts and byte identity, acknowledged-success-before-conflict ordering, active catalogue filtering/order, and immutable payment scenario snapshots across reseeding. `yarn workspace @executivepros/provider test` passes **11/11**; provider lint, typecheck, and build pass.
 - `yarn workspace @executivepros/provider test:unit`: **passed**, 2 tests.
 - `yarn workspace @executivepros/provider test:integration`: **passed**, 7 tests.
 - `yarn workspace @executivepros/provider test:contract`: **passed**, 1 test.
