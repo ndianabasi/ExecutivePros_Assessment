@@ -10,6 +10,7 @@
     "services/*"
   ],
   "scripts": {
+    "postinstall": "husky",
     "workspace:check": "yarn workspaces list --verbose",
     "lint": "eslint \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx}\"",
     "format:services": "prettier --write \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
@@ -23,12 +24,22 @@
     "stop": "node bin/assessment.mjs stop",
     "test:deployment": "node --test tests/deployment/*.test.mjs"
   },
+  "lint-staged": {
+    "services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix",
+      "eslint"
+    ],
+    "services/*/src/**/*.css": "prettier --write"
+  },
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "commander": "15.1.0",
     "eslint": "9.39.5",
     "eslint-plugin-jsdoc": "63.3.3",
     "globals": "17.14.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
     "prettier": "3.10.1",
     "typescript": "5.8.3",
     "typescript-eslint": "8.72.2"
