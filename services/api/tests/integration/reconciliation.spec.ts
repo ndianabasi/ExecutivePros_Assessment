@@ -16,10 +16,17 @@ async function makePendingPayment(db: Awaited<ReturnType<typeof useApiFixture>>[
   return { paymentId, reference }
 }
 
-test('reconciliation recovers a missed success webhook through the normal fulfilment transaction', async ({ assert }) => {
+test('reconciliation records each lookup and resolves a webhook mismatch through the normal fulfilment transaction', async ({ assert, client }) => {
   const { db, config, providerLookups } = await useApiFixture()
   const now = new Date()
   const { paymentId, reference } = await makePendingPayment(db, new Date(now.getTime() + 86400000))
+  const mismatch = { event_id: 'provider-mismatch-before-reconcile', event_type: 'payment.success', status: 'success', reference,
+    provider_reference: 'provider-mismatched', amount: 250001, currency: 'NGN', occurred_at: now.toISOString() }
+  const mismatchSignature = `sha256=${createHmac('sha256', config.providerWebhookSecret).update(JSON.stringify(mismatch)).digest('hex')}`
+  const rejectedEvidence = await client.post('/v1/webhooks/payment').header('X-Provider-Signature', mismatchSignature).json(mismatch)
+  assert.equal(rejectedEvidence.status(), 422)
+  assert.equal(rejectedEvidence.body().error.code, 'payment_evidence_mismatch')
+
   providerLookups.status = 200
   providerLookups.payment = { amount: 250000, currency: 'NGN', status: 'success', provider_reference: 'provider-reconciled',
     checkout_expires_at: new Date(now.getTime() + 86400000).toISOString() }
@@ -32,6 +39,23 @@ test('reconciliation recovers a missed success webhook through the normal fulfil
   assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
   assert.equal((await db('stock_reservations').where({ payment_id: paymentId }).first()).status, 'consumed')
   assert.equal(await db('provider_events').where({ reference, source: 'reconciliation', outcome: 'success' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+  const attempt = await db('payment_reconciliation_attempts').where({ payment_id: paymentId }).first()
+  assert.equal(attempt.attempt_number, 1)
+  assert.equal(attempt.outcome, 'provider_success_reconciled')
+  assert.equal(attempt.provider_status, 'success')
+  assert.equal(attempt.started_at, now.toISOString())
+  assert.isNotNull(attempt.completed_at)
+  assert.include(attempt.redacted_details, 'verified and applied')
+
+  const login = await client.post('/v1/login').json({ user_id: 1 })
+  const detail = await client.get(`/v1/payments/${paymentId}`).header('Authorization', `Bearer ${login.body().data.token}`)
+  assert.equal(detail.status(), 200)
+  assert.equal(detail.body().data.incidents.length, 1)
+  assert.equal(detail.body().data.incidents[0].code, 'provider_amount_currency_mismatch')
+  assert.isNotNull(detail.body().data.incidents[0].created_at)
+  assert.equal(detail.body().data.reconciliation_attempts.length, 1)
+  assert.equal(detail.body().data.reconciliation_attempts[0].outcome, 'provider_success_reconciled')
+  assert.isNotNull(detail.body().data.reconciliation_attempts[0].completed_at)
 })
 
 test('day-30 pending provider status fails the payment and releases stock without claiming cancellation', async ({ assert }) => {
@@ -46,6 +70,12 @@ test('day-30 pending provider status fails the payment and releases stock withou
   await reconciler.runDue(now)
 
   assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'failed')
+  const attempt = await db('payment_reconciliation_attempts').where({ payment_id: paymentId }).first()
+  assert.equal(attempt.outcome, 'provider_pending_expired')
+  assert.equal(attempt.provider_status, 'pending')
+  assert.isNotNull(attempt.started_at)
+  assert.isNotNull(attempt.completed_at)
+  assert.include(attempt.redacted_details, 'reserved stock released')
   assert.equal((await db('stock_reservations').where({ payment_id: paymentId }).first()).status, 'released')
   assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 0)
   assert.equal(await db('payment_incidents').where({ payment_id: paymentId, code: 'payment_expired_provider_pending' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
@@ -68,6 +98,11 @@ test('provider outage at expiry leaves payment and reservation pending and alert
   assert.equal((await db('stock_reservations').where({ payment_id: paymentId }).first()).status, 'active')
   assert.equal(await db('payment_incidents').where({ payment_id: paymentId, code: 'expired_payment_status_unavailable' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
   assert.equal(await db('notification_outbox').where({ notification_type: 'admin_incident' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+  const attempts = await db('payment_reconciliation_attempts').where({ payment_id: paymentId }).orderBy('attempt_number')
+  assert.equal(attempts.length, 2)
+  assert.deepEqual(attempts.map((attempt) => attempt.outcome), ['provider_lookup_failed', 'provider_lookup_failed'])
+  assert.isNotNull(attempts[0]?.completed_at)
+  assert.include(attempts[0]?.redacted_details, 'HTTP 503')
 })
 
 test('a webhook wins when it commits during an in-flight expiry status lookup', async ({ assert, client }) => {
@@ -92,4 +127,7 @@ test('a webhook wins when it commits during an in-flight expiry status lookup', 
   assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'success')
   assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
   assert.equal(await db('payment_incidents').where({ payment_id: paymentId, code: 'payment_expired_provider_pending' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 0)
+  const attempt = await db('payment_reconciliation_attempts').where({ payment_id: paymentId }).first()
+  assert.equal(attempt.outcome, 'payment_already_terminal')
+  assert.include(attempt.redacted_details, 'already success')
 })

@@ -171,9 +171,14 @@ export function createPaymentReconciler(db: Knex, provider: ProviderClient, conf
     if (Date.parse(candidate.checkout_expires_at) <= now.getTime()) {
       const expired = await expirePendingPayment(db, { paymentId: candidate.id, reference: candidate.reference,
         amount: payment.amount, currency: payment.currency, evidenceHash: evidenceHash(payment) }, eventHub)
-      await finishAttempt(candidate, now, expired ? 'provider_pending_expired' : 'provider_pending_review', expired
+      const currentPayment = await db('payments').select('status').where({ id: candidate.id }).first<{ status: string }>()
+      const attemptOutcome = expired ? 'provider_pending_expired' : currentPayment?.status !== 'pending' ? 'payment_already_terminal' : 'provider_pending_review'
+      const attemptDetails = expired
         ? 'Provider still reported pending at checkout expiry; API payment was failed and reserved stock released.'
-        : 'Provider still reported pending at checkout expiry, but the API payment needs review.', payment.status)
+        : currentPayment?.status !== 'pending'
+          ? `Provider still reported pending, but API payment was already ${currentPayment?.status}; no transition was applied.`
+          : 'Provider still reported pending at checkout expiry, but the API payment needs review.'
+      await finishAttempt(candidate, now, attemptOutcome, attemptDetails, payment.status)
       await immediate(db, async (tx) => {
         await tx.query('UPDATE payments SET reconcile_claim_token = NULL, reconcile_lease_until = NULL WHERE id = :id AND reconcile_claim_token = :token',
           { id: candidate.id, token: candidate.claim_token })
