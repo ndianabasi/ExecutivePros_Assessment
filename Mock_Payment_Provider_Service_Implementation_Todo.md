@@ -147,7 +147,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] **HMAC contract:** signed exact raw body, stable event ID/bytes on retry, altered-byte signature scenario, invalid signature rejection, and malformed signed JSON pass.
 - [ ] **Webhook retries:** 2xx stops, retryable network/timeout/5xx/408/429 gets five rounds with 2/4/8/16-second delays, permanent 4xx stops, and exhaustion remains inspectable.
 - [ ] **Attempt accounting:** every HTTP submission, including concurrent duplicates and replay, has a distinct number and bounded/redacted response evidence.
-- [ ] **Event states:** `delivered`, `failed`, and `skipped` match actual delivery outcomes and are independent of provider payment status and Workmatic done/dead.
+- [x] **Event states:** `delivered`, `failed`, and `skipped` match actual delivery outcomes and are independent of provider payment status and Workmatic done/dead.
 - [ ] **Scenario matrix:** all ten seeded codes produce their specified timing, duplicate count/order, skip, conflict, amount change, signature, or malformed-body behavior.
 - [ ] **Catalogue/snapshot:** only active scenarios are returned in stable order and reseeding does not change a payment's behavior.
 - [ ] **Compose end-to-end:** real frontend/API/provider success, failure, cancellation, iframe/new-tab flow, duplicate webhook with one fulfilment, missing/bad webhook reconciliation, and conflict incident pass.
@@ -165,7 +165,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] **D3 Persistence:** verify local volume ownership, free space, SQLite-safe pre-upgrade backup, provider `up` migrations/seeds, and same-file Workmatic initialization.
 - [x] **D3 Migration policy:** never run production `down` migrations or mutate another service's database.
 - [x] **D4 Readiness:** verify one provider container, internal liveness/readiness, schema/worker status, API-to-provider Bearer contract, browser payment page, and frontend iframe framing.
-- [ ] **D4 Outage behavior:** confirm an API webhook outage appears in diagnostics while provider outcomes/events remain durable and provider readiness stays valid.
+- [x] **D4 Outage behavior:** confirm an API webhook outage appears in diagnostics while provider outcomes/events remain durable and provider readiness stays valid.
 - [x] **D5 Functional smoke:** initialize, replay reference, complete Pay/Fail/Cancel on separate attempts, inspect status and signed webhook, and verify frontend API-state refresh after hint.
 - [ ] **D6 Recovery/scenario smoke:** exercise pre-persistence delay, test-proxy lost response, duplicate/conflicting/bad/missing/delayed webhook, API outage/recovery, event/job restart recovery, and browser expiry.
 - [x] **D6 Integrity:** verify one provider payment per reference and no API double fulfilment or terminal-state overwrite in recovery tests.
@@ -205,6 +205,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 
 - `yarn workspace @executivepros/provider test`: **passed**, 10 Japa tests. `typecheck`, `lint`, and `build` passed; repo-wide lint and service formatting checks passed.
 - Added service-authenticated `GET /diagnostics` for bounded provider backlog, Workmatic dead-job count, delivery attempts, oldest undelivered event, and SQLite/file-system capacity. The provider Japa contract asserts authorization, expected counts, and absence of service/webhook secrets and checkout capability fields; the 10-test suite, typecheck, lint, and build pass.
+- Fresh `yarn deploy:local --project e2e-finalize --env-file .local/e2e-finalize.env` rebuilt all six images with live BuildKit output and returned all services healthy. An isolated API outage produced provider webhook attempt 1 `retryable_failure`; authenticated diagnostics reported an undelivered event and delivery attempts while provider `/health/ready` remained `200`. After API restart, attempt 2 was acknowledged with HTTP `200` and API payment 22 reached `success`.
 - Aligned production and Japa startup: the initial due-event sweep runs before webhook handler registration/worker start, and the provider listener starts afterward. The retry test now waits for persisted event state after HTTP receipt; `yarn workspace @executivepros/provider test` passes 10/10 after this change.
 - A fresh six-service deployment in isolated project `e2e-finalize` reached healthy status on separate loopback ports. Frontend Playwright used the real provider iframe and exercised success, failure, cancellation, invalid-signature, and scenario flows; API logs showed persisted terminal transitions and webhook acknowledgement.
 - This does not replace the provider-owned exhaustive delivery/scenario/restart matrix, test-proxy crash windows, provider-volume backup/restore, or deployment rollback checks. Those remain open.
