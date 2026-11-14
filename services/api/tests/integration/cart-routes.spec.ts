@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
 test('cart routes create, update, retrieve, remove items, and enforce owner access', async ({ assert, client }) => {
-    await useApiFixture()
+    useApiFixture()
     const login = await client.post('/v1/login').json({ user_id: 1 })
     const token = login.body().data.token as string
     const invalidItem = await client.post('/v1/cart').header('Authorization', `Bearer ${token}`).json({ items: [{ product_id: 999, quantity: 1 }] })

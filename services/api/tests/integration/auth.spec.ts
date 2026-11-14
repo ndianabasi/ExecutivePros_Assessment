@@ -3,7 +3,7 @@ import { authenticate, listDemoUsers, login, logout } from '../../src/auth.js'
 import { useApiFixture } from '../macros.js'
 
 test('seeded user login stores only a token hash and logout revokes the session', async ({ assert }) => {
-  const { db } = await useApiFixture()
+  const { db } = useApiFixture()
     const users = await listDemoUsers(db)
     assert.deepEqual(users.map(({ role }) => role), ['user', 'admin', 'user'])
 
@@ -23,7 +23,7 @@ test('seeded user login stores only a token hash and logout revokes the session'
 })
 
 test('inactive or unknown seeded user cannot log in', async ({ assert }) => {
-  const { db } = await useApiFixture()
+  const { db } = useApiFixture()
     await db.raw('UPDATE users SET is_active = 0 WHERE id = 1')
     await assert.rejects(() => login(db, 1), /Unknown or inactive demo user/)
     await assert.rejects(() => login(db, 99), /Unknown or inactive demo user/)

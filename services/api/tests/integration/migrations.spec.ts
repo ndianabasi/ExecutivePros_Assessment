@@ -3,7 +3,7 @@ import { useApiFixture } from '../macros.js'
 import { verifyDatabase } from '../../src/db.js'
 
 test('migrates a file database and seeds demo records idempotently', async ({ assert }) => {
-  const { db } = await useApiFixture()
+  const { db } = useApiFixture()
   const first = await db.migrate.latest()
   const second = await db.migrate.latest()
   await db.seed.run()
@@ -19,7 +19,7 @@ test('migrates a file database and seeds demo records idempotently', async ({ as
 })
 
 test('disposable file database can roll back and reapply the complete migration batch', async ({ assert }) => {
-  const { db } = await useApiFixture()
+  const { db } = useApiFixture()
   const rollback = await db.migrate.rollback()
   assert.equal(rollback[0], 1)
   const applied = await db.migrate.latest()
@@ -30,7 +30,7 @@ test('disposable file database can roll back and reapply the complete migration 
 })
 
 test('SQLite schema enforces cart quantity, unique payment reference, and one pending payment per cart', async ({ assert }) => {
-  const { db } = await useApiFixture()
+  const { db } = useApiFixture()
   const cartId = Number((await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 }))[0])
   await assert.rejects(() => db('cart_items').insert({ cart_id: cartId, product_id: 1, product_name: 'Demo notebook', unit_price_minor: 250000, quantity: 0, line_total_minor: 0 }))
   const payment = {

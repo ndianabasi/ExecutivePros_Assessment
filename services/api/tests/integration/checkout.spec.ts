@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
 test('checkout persists reservations and returns one provider attempt for idempotent retries', async ({ assert, client }) => {
-  const { db, providerInitCalls } = await useApiFixture()
+  const { db, providerInitCalls } = useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   const token = login.body().data.token as string
   const scenarios = await client.get('/v1/failure-scenarios').header('Authorization', `Bearer ${token}`)

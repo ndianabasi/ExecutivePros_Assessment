@@ -3,7 +3,7 @@ import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
 test('signed payment success commits fulfilment, stock consumption, and one email intent atomically', async ({ assert, client }) => {
-  const { db, config } = await useApiFixture()
+  const { db, config } = useApiFixture()
   const [cartIdRaw] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
   const cartId = Number(cartIdRaw)
   await db('cart_items').insert({ cart_id: cartId, product_id: 1, product_name: 'Demo notebook', unit_price_minor: 250000, currency: 'NGN', quantity: 1, line_total_minor: 250000 })
@@ -52,7 +52,7 @@ test('signed payment success commits fulfilment, stock consumption, and one emai
 })
 
 test('late provider success after terminal expiry stays failed and creates one admin incident', async ({ assert, client }) => {
-  const { db, config } = await useApiFixture()
+  const { db, config } = useApiFixture()
   const [cartIdRaw] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
   const [paymentIdRaw] = await db('payments').insert({ user_id: 1, cart_id: Number(cartIdRaw), reference: 'pay_late_success0001',
     status: 'failed', amount_minor: 250000, currency: 'NGN', checkout_expires_at: new Date(0).toISOString(), completed_at: new Date().toISOString() })
@@ -73,7 +73,7 @@ test('late provider success after terminal expiry stays failed and creates one a
 })
 
 test('validly signed malformed JSON is correlated and persisted once as a payment incident', async ({ assert, client }) => {
-  const { db, config, apiPort } = await useApiFixture()
+  const { db, config, apiPort } = useApiFixture()
   const [cartId] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
   const reference = 'pay_malformed_webhook_0001'
   const [paymentId] = await db('payments').insert({ user_id: 1, cart_id: Number(cartId), reference, status: 'pending',
@@ -101,7 +101,7 @@ test('validly signed malformed JSON is correlated and persisted once as a paymen
 })
 
 test('malformed JSON cannot be attributed using an invalid reference signature', async ({ assert }) => {
-  const { db, config, apiPort } = await useApiFixture()
+  const { db, config, apiPort } = useApiFixture()
   const [cartId] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
   const reference = 'pay_malformed_untrusted_0001'
   const [paymentId] = await db('payments').insert({ user_id: 1, cart_id: Number(cartId), reference, status: 'pending',

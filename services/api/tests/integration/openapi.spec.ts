@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
 test('public OpenAPI document declares the configured server, auth boundaries, SSE, and no manual payment status route', async ({ assert, client }) => {
-  const { config } = await useApiFixture()
+  const { config } = useApiFixture()
   const response = await client.get('/v1/api_docs.json')
   assert.equal(response.status(), 200)
   assert.equal(response.headers()['cache-control'], 'no-store')

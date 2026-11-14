@@ -4,7 +4,7 @@ import { ProviderClient } from '../../src/provider.js'
 import { useApiFixture } from '../macros.js'
 
 test('provider status and queue job fixtures match the API outbound contracts', async ({ assert, client }) => {
-  const { config, providerLookups, queue } = await useApiFixture()
+  const { config, providerLookups, queue } = useApiFixture()
   const provider = new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs)
   const expiresAt = new Date(Date.now() + 60_000).toISOString()
   const initialized = await provider.initialise({ reference: 'pay_contract_reference0001', amount: 12345, currency: 'NGN', checkout_expires_at: expiresAt })

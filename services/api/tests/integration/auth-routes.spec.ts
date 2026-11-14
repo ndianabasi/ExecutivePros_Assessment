@@ -5,7 +5,7 @@ test("public discovery, passwordless login, protected products, and logout route
   assert,
   client
 }) => {
-  await useApiFixture();
+  useApiFixture();
   const discovered = await client.get('/v1/demo/users');
   assert.equal(discovered.status(), 200);
   assert.equal(discovered.body().data.length, 3);
@@ -34,7 +34,7 @@ test("public discovery, passwordless login, protected products, and logout route
 });
 
 test('API errors use the request-correlated error envelope', async ({ assert, client }) => {
-  const fixture = await useApiFixture()
+  const fixture = useApiFixture()
   const invalidLogin = await client.post('/v1/login').json({ user_id: 999 })
   assert.equal(invalidLogin.status(), 401)
   assert.equal(invalidLogin.body().error.code, 'invalid_user')

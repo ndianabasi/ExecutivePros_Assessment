@@ -17,7 +17,7 @@ async function makePendingPayment(db: Awaited<ReturnType<typeof useApiFixture>>[
 }
 
 test('reconciliation records each lookup and resolves a webhook mismatch through the normal fulfilment transaction', async ({ assert, client }) => {
-  const { db, config, providerLookups } = await useApiFixture()
+  const { db, config, providerLookups } = useApiFixture()
   const now = new Date()
   const { paymentId, reference } = await makePendingPayment(db, new Date(now.getTime() + 86400000))
   const mismatch = { event_id: 'provider-mismatch-before-reconcile', event_type: 'payment.success', status: 'success', reference,
@@ -59,7 +59,7 @@ test('reconciliation records each lookup and resolves a webhook mismatch through
 })
 
 test('invalid webhook signature incident stays attached to payment after provider reconciliation', async ({ assert, client }) => {
-  const { db, config, providerLookups } = await useApiFixture()
+  const { db, config, providerLookups } = useApiFixture()
   const now = new Date()
   const { paymentId, reference } = await makePendingPayment(db, new Date(now.getTime() + 86400000))
   const event = { event_id: 'provider-invalid-signature-reconcile', event_type: 'payment.success', status: 'success', reference,
@@ -90,7 +90,7 @@ test('invalid webhook signature incident stays attached to payment after provide
 })
 
 test('day-30 pending provider status fails the payment and releases stock without claiming cancellation', async ({ assert }) => {
-  const { db, config, providerLookups } = await useApiFixture()
+  const { db, config, providerLookups } = useApiFixture()
   const now = new Date()
   const { paymentId, reference } = await makePendingPayment(db, new Date(now.getTime() - 1))
   providerLookups.status = 200
@@ -115,7 +115,7 @@ test('day-30 pending provider status fails the payment and releases stock withou
 })
 
 test('provider outage at expiry leaves payment and reservation pending and alerts admins once', async ({ assert }) => {
-  const { db, config, providerLookups } = await useApiFixture()
+  const { db, config, providerLookups } = useApiFixture()
   const now = new Date()
   const { paymentId } = await makePendingPayment(db, new Date(now.getTime() - 1))
   providerLookups.status = 503
@@ -137,7 +137,7 @@ test('provider outage at expiry leaves payment and reservation pending and alert
 })
 
 test('a webhook wins when it commits during an in-flight expiry status lookup', async ({ assert, client }) => {
-  const { db, config, providerLookups } = await useApiFixture()
+  const { db, config, providerLookups } = useApiFixture()
   const now = new Date()
   const { paymentId, reference } = await makePendingPayment(db, new Date(now.getTime() - 1))
   providerLookups.status = 200

@@ -32,7 +32,7 @@ async function createPayment(db: Awaited<ReturnType<typeof useApiFixture>>['db']
 }
 
 test('payment activity SSE records webhook receipt, verification, result and terminal status for the owner only', async ({ assert, client }) => {
-  const { db, config, apiPort } = await useApiFixture()
+  const { db, config, apiPort } = useApiFixture()
   const ownerLogin = await client.post('/v1/login').json({ user_id: 1 })
   const otherLogin = await client.post('/v1/login').json({ user_id: 3 })
   const ownerToken = ownerLogin.body().data.token as string
@@ -77,7 +77,7 @@ test('payment activity SSE records webhook receipt, verification, result and ter
 })
 
 test('invalid webhook signature is emitted as an owner-scoped verification incident', async ({ assert }) => {
-  const { db, apiPort } = await useApiFixture()
+  const { db, apiPort } = useApiFixture()
   const login = await fetch(`http://127.0.0.1:${apiPort}/v1/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user_id: 1 }) })
   const { data } = await login.json() as { data: { token: string } }
   const reference = 'pay_sse_invalid_signature_00001'
@@ -96,7 +96,7 @@ test('invalid webhook signature is emitted as an owner-scoped verification incid
 })
 
 test('malformed signed webhook emits owner-scoped receipt, verification, and rejection activities', async ({ assert }) => {
-  const { db, config, apiPort } = await useApiFixture()
+  const { db, config, apiPort } = useApiFixture()
   const login = await fetch(`http://127.0.0.1:${apiPort}/v1/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user_id: 1 }) })
   const { data } = await login.json() as { data: { token: string } }
   const reference = 'pay_sse_malformed_webhook_0001'
@@ -124,7 +124,7 @@ test('malformed signed webhook emits owner-scoped receipt, verification, and rej
 })
 
 test('checkout SSE describes payment acceptance and provider initialization', async ({ assert, client }) => {
-  const { apiPort } = await useApiFixture()
+  const { apiPort } = useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   const token = login.body().data.token as string
   const stream = await fetch(`http://127.0.0.1:${apiPort}/v1/events`, { headers: { authorization: `Bearer ${token}` } })
@@ -144,7 +144,7 @@ test('checkout SSE describes payment acceptance and provider initialization', as
 })
 
 test('reconciliation emits started, applied status, and completed activity records', async ({ assert }) => {
-  const { db, config, apiPort, eventHub, providerLookups } = await useApiFixture()
+  const { db, config, apiPort, eventHub, providerLookups } = useApiFixture()
   const login = await fetch(`http://127.0.0.1:${apiPort}/v1/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user_id: 1 }) })
   const { data } = await login.json() as { data: { token: string } }
   const reference = 'pay_sse_reconciliation_0000001'

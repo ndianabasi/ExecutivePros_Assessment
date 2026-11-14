@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
 test('notification outbox retries queue failures and records acceptance without changing its stable key', async ({ assert }) => {
-  const { db, queue, dispatchOutbox } = await useApiFixture()
+  const { db, queue, dispatchOutbox } = useApiFixture()
   assert.isDefined(queue)
   assert.isDefined(dispatchOutbox)
   const notificationKey = 'notify_payment_success_outbox_test'

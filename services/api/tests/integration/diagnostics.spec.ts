@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
 test('diagnostics requires an admin and reports expired payment and outbox backlog counts', async ({ assert, client }) => {
-  const { db } = await useApiFixture()
+  const { db } = useApiFixture()
   const [cartIdRaw] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 100 })
   await db('payments').insert({ user_id: 1, cart_id: Number(cartIdRaw), reference: 'pay_diagnostics0001', status: 'pending',
     amount_minor: 100, currency: 'NGN', checkout_expires_at: new Date(0).toISOString() })
