@@ -201,7 +201,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] **D4 Dependencies:** verify provider and queue endpoints/auth contracts are reachable for checkout and notification smoke tests in the real-service Japa e2e path.
 - [ ] **D5 Functional smoke:** verify seeded login, product/cart reads, checkout, provider-confirmed completion, payment read, one fulfilment, stock decrement, outbox acceptance, SSE, and OpenAPI fetch in Compose.
 - [ ] **D6 Recovery smoke:** replay checkout key and webhook; interrupt/restore provider and queue; verify no duplicate payment/fulfilment and eventual reconciliation/outbox drain.
-- [ ] **D6 Security smoke:** reject and log an invalid webhook signature without changing payment state.
+- [x] **D6 Security smoke:** reject and log an invalid webhook signature without changing payment state.
 - [ ] **D7 Operations:** document local start/stop, migrations, disposable seed/reset, configuration, scenario walkthrough, test commands, request-ID tracing, backup/restore, and manual late-success resolution in README.
 - [ ] **D7 Operations:** record every deployment-gate result and any unrun check; do not expose the API if a pre-traffic gate fails.
 - [ ] Prepare rollback: preserve database/logs, restore a previous image only if schema-compatible, otherwise restore the verified pre-migration backup into an isolated volume; never use production `down`.
@@ -246,6 +246,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - 2026-11-14: `yarn workspace @executivepros/api test:integration` passes (10 tests) with loopback fixture binding allowed; the default sandbox attempt was blocked with `listen EPERM` on the `.env.test` port and was not counted as a test failure.
 - 2026-11-14: Added payment reconciliation claims/leases, scheduled scans, lookup validation, normal terminal transition reuse, expiry handling, bounded retry, deduplicated admin alerting, and admin backlog diagnostics.
 - 2026-11-14: Japa integration cases pass for missed-webhook lookup, expiry with provider pending, provider outage, and webhook-vs-expiry race; webhook tests cover duplicate late success with one admin incident and no fulfilment.
+- 2026-11-14: isolated Compose `WEBHOOK_004` skipped delivery; API reconciliation recovered provider success with one fulfilment. A forged success signature returned `401` and left a real pending payment unchanged; the checkout was then cancelled through the provider and released its reservation.
 - 2026-11-14: Added public versioned OpenAPI, a structural HTTP integration check, and a contract suite for provider status/init, queue job acceptance, HMAC/Bearer separation, checkout idempotency, and payment-status route absence.
 - 2026-11-14: API e2e now launches a real queue service process with its own temporary Workmatic database and an isolated Mailpit container. It verifies API outbox acceptance reaches Mailpit through authenticated `POST /jobs`; repeated submissions with one `notification_key` return distinct job IDs and two captured messages.
 - `yarn workspace @executivepros/api test`: **passed**, 27 tests across unit, integration, contract, and real-provider e2e suites, including real-provider skipped-webhook reconciliation.
