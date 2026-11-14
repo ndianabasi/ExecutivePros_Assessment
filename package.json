@@ -12,7 +12,7 @@
   "scripts": {
     "postinstall": "husky",
     "workspace:check": "yarn workspaces list --verbose",
-    "lint": "eslint \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx}\"",
+    "lint": "eslint \"services/*/{src,tests}/**/*.{js,jsx,cjs,mjs,ts,tsx}\"",
     "format:services": "prettier --write \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
     "format:check:services": "prettier --check \"services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx,css}\"",
     "deploy:local": "node bin/assessment.mjs deploy:local",
@@ -25,12 +25,12 @@
     "test:deployment": "node --test tests/deployment/*.test.mjs"
   },
   "lint-staged": {
-    "services/*/src/**/*.{js,jsx,cjs,mjs,ts,tsx}": [
+    "services/*/{src,tests}/**/*.{js,jsx,cjs,mjs,ts,tsx}": [
       "prettier --write",
       "eslint --fix",
       "eslint"
     ],
-    "services/*/src/**/*.css": "prettier --write"
+    "services/*/{src,tests}/**/*.css": "prettier --write"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
