@@ -19,40 +19,96 @@ export interface QueueConfig {
   shutdownGraceMs: number
 }
 
+/**
+ * Returns a required environment value or raises a configuration error when it is absent.
+ *
+ * @param env - Environment variables used to load and validate service configuration.
+ * @param key - Stable idempotency or notification key used to correlate repeated submissions.
+ *
+ * @returns A non-empty required configuration value or a descriptive configuration error.
+ */
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key]?.trim()
-  if (!value) throw new Error(`Missing required configuration: ${key}`)
+  if (!value) {
+    throw new Error(`Missing required configuration: ${key}`)
+  }
   return value
 }
 
+/**
+ * Parses and bounds an integer environment setting before the service uses it.
+ *
+ * @param env - Environment variables used to load and validate service configuration.
+ * @param key - Stable idempotency or notification key used to correlate repeated submissions.
+ * @param fallback - Default value used when the optional environment setting is absent.
+ * @param min - Inclusive minimum allowed for the parsed configuration value.
+ * @param max - Inclusive maximum allowed for the parsed configuration value.
+ *
+ * @returns A validated bounded integer configuration value.
+ */
 function integer(env: NodeJS.ProcessEnv, key: string, fallback: number, min: number, max: number): number {
   const value = Number(env[key] ?? fallback)
-  if (!Number.isSafeInteger(value) || value < min || value > max) throw new Error(`${key} must be an integer between ${min} and ${max}`)
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new Error(`${key} must be an integer between ${min} and ${max}`)
+  }
   return value
 }
 
+/**
+ * Loads a required secret from its environment variable or mounted secret file.
+ *
+ * @param env - Environment variables used to load and validate service configuration.
+ *
+ * @returns A sufficiently strong configured secret or a descriptive configuration error.
+ */
 function secret(env: NodeJS.ProcessEnv): string {
   const direct = env.QUEUE_SERVICE_SECRET?.trim()
   const path = env.QUEUE_SERVICE_SECRET_FILE?.trim()
-  if (direct && path) throw new Error('Configure only QUEUE_SERVICE_SECRET or QUEUE_SERVICE_SECRET_FILE')
-  if (direct && env.NODE_ENV !== 'test') throw new Error('QUEUE_SERVICE_SECRET direct values are allowed only in tests; configure QUEUE_SERVICE_SECRET_FILE')
+  if (direct && path) {
+    throw new Error('Configure only QUEUE_SERVICE_SECRET or QUEUE_SERVICE_SECRET_FILE')
+  }
+  if (direct && env.NODE_ENV !== 'test') {
+    throw new Error(
+      'QUEUE_SERVICE_SECRET direct values are allowed only in tests; configure QUEUE_SERVICE_SECRET_FILE',
+    )
+  }
   const value = path ? readFileSync(path, 'utf8').trim() : direct
-  if (!value || Buffer.byteLength(value) < 32) throw new Error('QUEUE_SERVICE_SECRET must contain at least 32 bytes')
+  if (!value || Buffer.byteLength(value) < 32) {
+    throw new Error('QUEUE_SERVICE_SECRET must contain at least 32 bytes')
+  }
   return value
 }
 
+/**
+ * Loads and validates service environment values, including explicit defaults and bounds.
+ *
+ * @param env - Environment variables used to load and validate service configuration.
+ *
+ * @returns The requested value or matching records from the configured service source.
+ */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): QueueConfig {
   const nodeEnv = required(env, 'NODE_ENV')
-  if (!['development', 'test', 'production'].includes(nodeEnv)) throw new Error('NODE_ENV must be development, test, or production')
+  if (!['development', 'test', 'production'].includes(nodeEnv)) {
+    throw new Error('NODE_ENV must be development, test, or production')
+  }
   const jobsDbPath = required(env, 'JOBS_DB_PATH')
-  if (!isAbsolute(jobsDbPath)) throw new Error('JOBS_DB_PATH must be an absolute path')
+  if (!isAbsolute(jobsDbPath)) {
+    throw new Error('JOBS_DB_PATH must be an absolute path')
+  }
   const resolvedPath = resolve(jobsDbPath)
   const relativePath = relative('/data', resolvedPath)
-  if (nodeEnv === 'production' && (relativePath === '' || relativePath === '..' || relativePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`))) {
+  if (
+    nodeEnv === 'production' &&
+    (relativePath === '' ||
+      relativePath === '..' ||
+      relativePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`))
+  ) {
     throw new Error('JOBS_DB_PATH must be inside the mounted /data directory')
   }
   const smtpFrom = required(env, 'SMTP_FROM')
-  if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(smtpFrom)) throw new Error('SMTP_FROM must be a valid email address')
+  if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(smtpFrom)) {
+    throw new Error('SMTP_FROM must be a valid email address')
+  }
   const config: QueueConfig = {
     nodeEnv: nodeEnv as QueueConfig['nodeEnv'],
     port: integer(env, 'PORT', 3000, 1, 65535),

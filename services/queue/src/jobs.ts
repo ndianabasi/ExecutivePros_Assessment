@@ -15,10 +15,21 @@ export interface EmailJob {
   payment_reference?: string
 }
 
+/**
+ * Opens the SQLite-backed queue at the supplied service-owned database path.
+ *
+ * @param path - Filesystem or URL path used to locate the requested resource.
+ */
 export function openQueue(path: string) {
   return createDatabase({ filename: path })
 }
 
+/**
+ * Creates the persistent email queue and worker using the configured sender dependency.
+ *
+ * @param config - Validated service configuration controlling the operation and dependency boundaries.
+ * @param dependencies - Service dependencies and runtime capabilities injected into the application factory.
+ */
 export function createQueueRuntime(config: QueueConfig, dependencies: { sender?: SmtpSender } = {}) {
   const db = openQueue(config.jobsDbPath)
   const client = createClient({ db, queue: 'emails' })
@@ -30,29 +41,79 @@ export function createQueueRuntime(config: QueueConfig, dependencies: { sender?:
     leaseMs: config.leaseMs,
     pollMs: config.pollMs,
     timeoutMs: config.jobTimeoutMs,
-    backoff: (attempt: number) => config.retryInitialMs * 2 ** Math.max(0, attempt - 1),
+    backoff: (attempt: number) => {
+      return config.retryInitialMs * 2 ** Math.max(0, attempt - 1)
+    },
     persistState: false,
     autoRestore: false,
   })
   worker.process(async (job: Job<EmailJob>) => {
     const attempt = job.attempts + 1
-    const notificationHash = createHash('sha256').update(job.payload.notification_key).digest('hex').slice(0, 16)
-    const metadata = { requestId: job.payload.request_id, jobId: job.id, notificationHash, paymentReference: job.payload.payment_reference, attempt }
+    const notificationHash = createHash('sha256')
+      .update(job.payload.notification_key)
+      .digest('hex')
+      .slice(0, 16)
+    const metadata = {
+      requestId: job.payload.request_id,
+      jobId: job.id,
+      notificationHash,
+      paymentReference: job.payload.payment_reference,
+      attempt,
+    }
     const startedAt = performance.now()
     try {
       await sender.send(job.payload)
-      logger.info({ ...metadata, outcome: 'smtp_accepted', durationMs: Math.round((performance.now() - startedAt) * 100) / 100 }, 'Email accepted by SMTP')
+      logger.info(
+        {
+          ...metadata,
+          outcome: 'smtp_accepted',
+          durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        },
+        'Email accepted by SMTP',
+      )
     } catch (error) {
-      const status = typeof error === 'object' && error !== null && 'responseCode' in error ? Number(error.responseCode) : undefined
+      const status =
+        typeof error === 'object' && error !== null && 'responseCode' in error
+          ? Number(error.responseCode)
+          : undefined
       const permanent = status !== undefined && status >= 500 && status < 600
       const reason = error instanceof Error ? error.name : 'UnknownError'
       if (permanent) {
-        logger.error({ ...metadata, outcome: 'permanent_rejection', smtpResponseCode: status, errorClass: reason, durationMs: Math.round((performance.now() - startedAt) * 100) / 100 }, 'SMTP permanently rejected email')
+        logger.error(
+          {
+            ...metadata,
+            outcome: 'permanent_rejection',
+            smtpResponseCode: status,
+            errorClass: reason,
+            durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+          },
+          'SMTP permanently rejected email',
+        )
         return
       }
       const durationMs = Math.round((performance.now() - startedAt) * 100) / 100
-      logger.warn({ ...metadata, outcome: 'transient_failure', smtpResponseCode: status, errorClass: reason, durationMs }, 'SMTP delivery attempt failed')
-      if (attempt >= config.maxAttempts) logger.error({ ...metadata, outcome: 'transient_exhausted', smtpResponseCode: status, errorClass: reason, durationMs }, 'SMTP retries exhausted')
+      logger.warn(
+        {
+          ...metadata,
+          outcome: 'transient_failure',
+          smtpResponseCode: status,
+          errorClass: reason,
+          durationMs,
+        },
+        'SMTP delivery attempt failed',
+      )
+      if (attempt >= config.maxAttempts) {
+        logger.error(
+          {
+            ...metadata,
+            outcome: 'transient_exhausted',
+            smtpResponseCode: status,
+            errorClass: reason,
+            durationMs,
+          },
+          'SMTP retries exhausted',
+        )
+      }
       throw error
     }
   })

@@ -13,11 +13,17 @@ const config = loadConfig()
 const db = createDatabase(config.dbPath)
 const outbox = createNotificationOutboxDispatcher(db, createEmailQueueClient(config), config)
 const eventHub = new PaymentEventHub()
-const provider = new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs)
+const provider = new ProviderClient(
+  config.providerBaseUrl,
+  config.providerServiceSecret,
+  config.providerTimeoutMs,
+)
 const reconciler = createPaymentReconciler(db, provider, config, eventHub)
 const app = createApp({
   db,
-  isReady: () => verifyDatabase(db),
+  isReady: () => {
+    return verifyDatabase(db)
+  },
   frontendOrigin: config.frontendOrigin,
   docsOrigin: config.docsOrigin,
   provider,
@@ -29,31 +35,76 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   process.stdout.write(`API listening on port ${config.port}\n`)
 })
 
-void outbox.dispatchDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'notification outbox startup sweep failed'))
-void reconciler.runDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'payment reconciliation startup sweep failed'))
+void outbox.dispatchDue().catch((error) => {
+  return logger.error(
+    { error_type: error instanceof Error ? error.name : 'unknown' },
+    'notification outbox startup sweep failed',
+  )
+})
+void reconciler.runDue().catch((error) => {
+  return logger.error(
+    { error_type: error instanceof Error ? error.name : 'unknown' },
+    'payment reconciliation startup sweep failed',
+  )
+})
 const outboxTimer = setInterval(() => {
-  void outbox.dispatchDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'notification outbox sweep failed'))
+  void outbox.dispatchDue().catch((error) => {
+    return logger.error(
+      { error_type: error instanceof Error ? error.name : 'unknown' },
+      'notification outbox sweep failed',
+    )
+  })
 }, config.outboxIntervalMs)
 const reconciliationTimer = setInterval(() => {
-  void reconciler.runDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'payment reconciliation sweep failed'))
+  void reconciler.runDue().catch((error) => {
+    return logger.error(
+      { error_type: error instanceof Error ? error.name : 'unknown' },
+      'payment reconciliation sweep failed',
+    )
+  })
 }, config.reconcileIntervalMs)
 
 let stopping = false
+
+/**
+ * Stops accepting work, drains active operations within the grace period, and closes service resources.
+ *
+ * @param signal - Process shutdown signal that initiated the graceful stop sequence.
+ */
 async function shutdown(signal: string) {
-  if (stopping) return
+  if (stopping) {
+    return
+  }
   stopping = true
   logger.info({ signal }, 'API shutdown started')
   clearInterval(outboxTimer)
   clearInterval(reconciliationTimer)
-  const hardStop = setTimeout(() => { logger.error({ grace_ms: 25000 }, 'API shutdown grace period expired'); process.exit(1) }, 25000)
+  const hardStop = setTimeout(() => {
+    logger.error({ grace_ms: 25000 }, 'API shutdown grace period expired')
+    process.exit(1)
+  }, 25000)
   hardStop.unref()
   eventHub.close()
-  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  await new Promise<void>((resolve, reject) => {
+    return server.close((error) => {
+      return error ? reject(error) : resolve()
+    })
+  })
   await outbox.close()
   await reconciler.close()
   await db.destroy()
   clearTimeout(hardStop)
   logger.info('API shutdown complete')
 }
-process.once('SIGTERM', () => { void shutdown('SIGTERM').catch((error) => { logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'API shutdown failed'); process.exitCode = 1 }) })
-process.once('SIGINT', () => { void shutdown('SIGINT').catch((error) => { logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'API shutdown failed'); process.exitCode = 1 }) })
+process.once('SIGTERM', () => {
+  void shutdown('SIGTERM').catch((error) => {
+    logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'API shutdown failed')
+    process.exitCode = 1
+  })
+})
+process.once('SIGINT', () => {
+  void shutdown('SIGINT').catch((error) => {
+    logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'API shutdown failed')
+    process.exitCode = 1
+  })
+})

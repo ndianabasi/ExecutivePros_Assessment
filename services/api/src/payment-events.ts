@@ -42,32 +42,58 @@ interface Subscriber {
   close(): void
 }
 
+/**
+ * Fans out payment activity records to live SSE subscribers grouped by authenticated user ID.
+ */
 export class PaymentEventHub {
   private readonly subscribers = new Map<number, Set<Subscriber>>()
 
+  /**
+   * Adds an authenticated owner stream to the event hub and returns an unsubscribe function.
+   *
+   * @param userId - Seeded-user identifier used to scope authentication, payments, or stored preferences.
+   * @param subscriber - Input value used by this operation.
+   */
   subscribe(userId: number, subscriber: Subscriber): () => void {
     const listeners = this.subscribers.get(userId) ?? new Set<Subscriber>()
     listeners.add(subscriber)
     this.subscribers.set(userId, listeners)
     return () => {
       listeners.delete(subscriber)
-      if (listeners.size === 0) this.subscribers.delete(userId)
+      if (listeners.size === 0) {
+        this.subscribers.delete(userId)
+      }
     }
   }
 
+  /**
+   * Creates a uniquely identified activity event and sends it to connected subscribers for its owner.
+   *
+   * @param userId - Seeded-user identifier used to scope authentication, payments, or stored preferences.
+   * @param draft - Input value used by this operation.
+   *
+   * @returns The unique payment activity event published to the owner stream.
+   */
   publish(userId: number, draft: PaymentActivityDraft): PaymentActivityEvent {
     const event: PaymentActivityEvent = {
       ...draft,
       id: randomUUID(),
       occurred_at: draft.occurred_at ?? new Date().toISOString(),
     }
-    for (const subscriber of this.subscribers.get(userId) ?? []) subscriber.send(event)
+    for (const subscriber of this.subscribers.get(userId) ?? []) {
+      subscriber.send(event)
+    }
     return event
   }
 
+  /**
+   * Closes the owned stream, transport, database, or worker resources and releases their listeners.
+   */
   close(): void {
     for (const listeners of this.subscribers.values()) {
-      for (const subscriber of listeners) subscriber.close()
+      for (const subscriber of listeners) {
+        subscriber.close()
+      }
     }
     this.subscribers.clear()
   }

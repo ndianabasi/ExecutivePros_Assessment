@@ -10,9 +10,17 @@ native.pragma('busy_timeout = 5000')
 native.pragma('journal_mode = WAL')
 const workmatic = createWorkmaticDatabase({ db: native })
 try {
-  const rows = native.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN ('workmatic_jobs', 'workmatic_settings')").get() as { count: number }
-  if (Number(rows.count) !== 2) throw new Error('Workmatic schema initialization failed')
+  const rows = native
+    .prepare(
+      "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN ('workmatic_jobs', 'workmatic_settings')",
+    )
+    .get() as { count: number }
+  if (Number(rows.count) !== 2) {
+    throw new Error('Workmatic schema initialization failed')
+  }
 } finally {
   await workmatic.destroy()
-  if (native.open) native.close()
+  if (native.open) {
+    native.close()
+  }
 }

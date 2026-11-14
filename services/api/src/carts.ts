@@ -6,23 +6,50 @@ import { cartItemUpdateValidator, cartItemsValidator, positiveIdValidator, valid
 
 type Row = Record<string, unknown>
 
+/**
+ * Loads the user active cart through the current SQLite transaction.
+ *
+ * @param tx - Active SQLite transaction used to keep related database changes atomic.
+ * @param userId - Seeded-user identifier used to scope authentication, payments, or stored preferences.
+ *
+ * @returns The user active cart row loaded within the supplied transaction, or no row when none exists.
+ */
 async function activeCart(tx: SqliteTransaction, userId: number): Promise<Row | undefined> {
-  return (await tx.query('SELECT * FROM carts WHERE user_id = :user_id AND status = :status', { user_id: userId, status: 'active' }))[0]
+  return (
+    await tx.query('SELECT * FROM carts WHERE user_id = :user_id AND status = :status', {
+      user_id: userId,
+      status: 'active',
+    })
+  )[0]
 }
 
+/**
+ * Builds the public cart response from persisted cart items and server-calculated totals.
+ *
+ * @param db - Service-owned database connection used for the required persistent read or write.
+ * @param cart - Owner-scoped active cart whose item snapshot and server-calculated total are being read or changed.
+ */
 async function cartPayload(db: Knex, cart: Row) {
-  const items = await db.raw(
+  const items = (await db.raw(
     `SELECT ci.product_id, ci.product_name, ci.unit_price_minor, ci.quantity, ci.line_total_minor
-     FROM cart_items ci WHERE ci.cart_id = :cart_id ORDER BY ci.product_id`, { cart_id: cart.id },
-  ) as Row[]
-  const payments = await db.raw(
+     FROM cart_items ci WHERE ci.cart_id = :cart_id ORDER BY ci.product_id`,
+    { cart_id: cart.id },
+  )) as Row[]
+  const payments = (await db.raw(
     `SELECT id, reference, status, amount_minor, currency, payment_url, initialisation_state,
             failure_scenario_code, created_at, completed_at
-     FROM payments WHERE cart_id = :cart_id ORDER BY created_at DESC, id DESC`, { cart_id: cart.id },
-  ) as Row[]
+     FROM payments WHERE cart_id = :cart_id ORDER BY created_at DESC, id DESC`,
+    { cart_id: cart.id },
+  )) as Row[]
   return { ...cart, items, payments }
 }
 
+/**
+ * Recalculates and persists the cart item count, currency, and total from its item rows.
+ *
+ * @param tx - Active SQLite transaction used to keep related database changes atomic.
+ * @param cartId - Owner-scoped cart identifier used to select checkout and item records.
+ */
 async function recompute(tx: SqliteTransaction, cartId: number) {
   const totals = await tx.query<{ total_minor: number; currency: string; item_count: number }>(
     `SELECT COALESCE(SUM(line_total_minor), 0) AS total_minor,
@@ -31,46 +58,100 @@ async function recompute(tx: SqliteTransaction, cartId: number) {
     { cart_id: cartId },
   )
   const row = totals[0]
-  if (!row) throw new Error('Cart total query returned no row')
+  if (!row) {
+    throw new Error('Cart total query returned no row')
+  }
   if (!Number.isSafeInteger(Number(row.total_minor)) || Number(row.total_minor) > Number.MAX_SAFE_INTEGER) {
     throw new HttpError(409, 'amount_overflow', 'Cart total exceeds the supported amount')
   }
-  await tx.query('UPDATE carts SET total_minor = :total, currency = :currency, updated_at = CURRENT_TIMESTAMP WHERE id = :id', {
-    total: Number(row.total_minor), currency: row.currency, id: cartId,
-  })
+  await tx.query(
+    'UPDATE carts SET total_minor = :total, currency = :currency, updated_at = CURRENT_TIMESTAMP WHERE id = :id',
+    {
+      total: Number(row.total_minor),
+      currency: row.currency,
+      id: cartId,
+    },
+  )
 }
 
-async function addItem(tx: SqliteTransaction, cartId: number, item: { product_id: number; quantity: number }) {
-  const product = (await tx.query<{ id: number; name: string; price_minor: number; currency: string; stock_quantity: number; is_active: number }>(
-    `SELECT id, name, price_minor, currency, stock_quantity, is_active FROM products WHERE id = :id`, { id: item.product_id },
-  ))[0]
-  if (!product || Number(product.is_active) !== 1) throw new HttpError(409, 'product_unavailable', 'A selected product is unavailable')
-  const cart = (await tx.query<{ currency: string }>('SELECT currency FROM carts WHERE id = :id', { id: cartId }))[0]
-  if (!cart) throw new Error('Cart disappeared during item update')
-  if (cart.currency !== product.currency) throw new HttpError(409, 'currency_mismatch', 'All cart items must use the same currency')
-  const previous = (await tx.query<{ quantity: number }>(
-    'SELECT quantity FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id',
-    { cart_id: cartId, product_id: item.product_id },
-  ))[0]
+/**
+ * Validates stock and adds or updates one product line in the active cart transaction.
+ *
+ * @param tx - Active SQLite transaction used to keep related database changes atomic.
+ * @param cartId - Owner-scoped cart identifier used to select checkout and item records.
+ * @param item - Cart, queue, or result item currently being validated, transformed, or persisted.
+ */
+async function addItem(
+  tx: SqliteTransaction,
+  cartId: number,
+  item: { product_id: number; quantity: number },
+) {
+  const product = (
+    await tx.query<{
+      id: number
+      name: string
+      price_minor: number
+      currency: string
+      stock_quantity: number
+      is_active: number
+    }>(`SELECT id, name, price_minor, currency, stock_quantity, is_active FROM products WHERE id = :id`, {
+      id: item.product_id,
+    })
+  )[0]
+  if (!product || Number(product.is_active) !== 1) {
+    throw new HttpError(409, 'product_unavailable', 'A selected product is unavailable')
+  }
+  const cart = (
+    await tx.query<{ currency: string }>('SELECT currency FROM carts WHERE id = :id', { id: cartId })
+  )[0]
+  if (!cart) {
+    throw new Error('Cart disappeared during item update')
+  }
+  if (cart.currency !== product.currency) {
+    throw new HttpError(409, 'currency_mismatch', 'All cart items must use the same currency')
+  }
+  const previous = (
+    await tx.query<{ quantity: number }>(
+      'SELECT quantity FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id',
+      { cart_id: cartId, product_id: item.product_id },
+    )
+  )[0]
   const quantity = Number(previous?.quantity ?? 0) + item.quantity
-  const reserved = (await tx.query<{ quantity: number }>(
-    "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM stock_reservations WHERE product_id = :id AND status = 'active'",
-    { id: item.product_id },
-  ))[0]
+  const reserved = (
+    await tx.query<{ quantity: number }>(
+      "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM stock_reservations WHERE product_id = :id AND status = 'active'",
+      { id: item.product_id },
+    )
+  )[0]
   if (Number(product.stock_quantity) - Number(reserved?.quantity ?? 0) < quantity) {
     throw new HttpError(409, 'stock_unavailable', 'The requested product quantity is unavailable')
   }
   const lineTotal = Number(product.price_minor) * quantity
-  if (!Number.isSafeInteger(lineTotal)) throw new HttpError(400, 'amount_overflow', 'Cart item total exceeds the supported amount')
+  if (!Number.isSafeInteger(lineTotal)) {
+    throw new HttpError(400, 'amount_overflow', 'Cart item total exceeds the supported amount')
+  }
   await tx.query(
     `INSERT INTO cart_items(cart_id, product_id, product_name, unit_price_minor, quantity, line_total_minor)
      VALUES (:cart_id, :product_id, :name, :unit_price, :quantity, :line_total)
      ON CONFLICT(cart_id, product_id) DO UPDATE SET product_name = excluded.product_name,
        unit_price_minor = excluded.unit_price_minor, quantity = excluded.quantity, line_total_minor = excluded.line_total_minor`,
-    { cart_id: cartId, product_id: item.product_id, name: product.name, unit_price: product.price_minor, quantity, line_total: lineTotal },
+    {
+      cart_id: cartId,
+      product_id: item.product_id,
+      name: product.name,
+      unit_price: product.price_minor,
+      quantity,
+      line_total: lineTotal,
+    },
   )
 }
 
+/**
+ * Registers cart reads and mutations with ownership checks and stock validation.
+ *
+ * @param app - Express application to which middleware and route handlers are attached.
+ * @param db - Service-owned database connection used for the required persistent read or write.
+ */
 export function registerCartRoutes(app: import('express').Express, db: Knex) {
   app.get('/v1/cart', async (request, response) => {
     const user = authenticatedUser(request)
@@ -81,16 +162,24 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.post('/v1/cart', async (request, response) => {
     const user = authenticatedUser(request)
-    const { items } = await validate<{ items: Array<{ product_id: number; quantity: number }> }>(cartItemsValidator, request.body, 'invalid_items', 'items must contain 1 to 50 products with positive integer IDs and quantities')
+    const { items } = await validate<{ items: Array<{ product_id: number; quantity: number }> }>(
+      cartItemsValidator,
+      request.body,
+      'invalid_items',
+      'items must contain 1 to 50 products with positive integer IDs and quantities',
+    )
     const cartId = await immediate(db, async (tx) => {
       let cart = await activeCart(tx, user.userId)
       if (!cart) {
         const result = await tx.query<{ id: number }>(
-          `INSERT INTO carts(user_id, status, currency, total_minor) VALUES (:user_id, 'active', 'NGN', 0) RETURNING id`, { user_id: user.userId },
+          `INSERT INTO carts(user_id, status, currency, total_minor) VALUES (:user_id, 'active', 'NGN', 0) RETURNING id`,
+          { user_id: user.userId },
         )
         cart = { id: result[0]!.id }
       }
-      for (const item of items) await addItem(tx, Number(cart.id), item)
+      for (const item of items) {
+        await addItem(tx, Number(cart.id), item)
+      }
       await recompute(tx, Number(cart.id))
       return Number(cart.id)
     })
@@ -100,14 +189,36 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.patch('/v1/cart/items/:product_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const { id: productId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.product_id }, 'invalid_product_id', 'product_id must be a positive integer')
-    const { quantity } = await validate<{ quantity: number }>(cartItemUpdateValidator, request.body, 'invalid_quantity', 'quantity must be a positive integer')
+    const { id: productId } = await validate<{ id: number }>(
+      positiveIdValidator,
+      { id: request.params.product_id },
+      'invalid_product_id',
+      'product_id must be a positive integer',
+    )
+    const { quantity } = await validate<{ quantity: number }>(
+      cartItemUpdateValidator,
+      request.body,
+      'invalid_quantity',
+      'quantity must be a positive integer',
+    )
     const cartId = await immediate(db, async (tx) => {
       const cart = await activeCart(tx, user.userId)
-      if (!cart) throw new HttpError(404, 'cart_not_found', 'No active cart exists')
-      const existing = (await tx.query('SELECT product_id FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id', { cart_id: cart.id, product_id: productId }))[0]
-      if (!existing) throw new HttpError(404, 'cart_item_not_found', 'The item is not in the active cart')
-      await tx.query('DELETE FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id', { cart_id: cart.id, product_id: productId })
+      if (!cart) {
+        throw new HttpError(404, 'cart_not_found', 'No active cart exists')
+      }
+      const existing = (
+        await tx.query(
+          'SELECT product_id FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id',
+          { cart_id: cart.id, product_id: productId },
+        )
+      )[0]
+      if (!existing) {
+        throw new HttpError(404, 'cart_item_not_found', 'The item is not in the active cart')
+      }
+      await tx.query('DELETE FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id', {
+        cart_id: cart.id,
+        product_id: productId,
+      })
       await addItem(tx, Number(cart.id), { product_id: productId, quantity })
       await recompute(tx, Number(cart.id))
       return Number(cart.id)
@@ -117,11 +228,21 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.delete('/v1/cart/items/:product_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const { id: productId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.product_id }, 'invalid_product_id', 'product_id must be a positive integer')
+    const { id: productId } = await validate<{ id: number }>(
+      positiveIdValidator,
+      { id: request.params.product_id },
+      'invalid_product_id',
+      'product_id must be a positive integer',
+    )
     await immediate(db, async (tx) => {
       const cart = await activeCart(tx, user.userId)
-      if (!cart) return
-      await tx.query('DELETE FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id', { cart_id: cart.id, product_id: productId })
+      if (!cart) {
+        return
+      }
+      await tx.query('DELETE FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id', {
+        cart_id: cart.id,
+        product_id: productId,
+      })
       await recompute(tx, Number(cart.id))
     })
     response.status(204).end()
@@ -130,16 +251,26 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
   app.delete('/v1/cart', async (request, response) => {
     const user = authenticatedUser(request)
     await immediate(db, async (tx) => {
-      await tx.query("UPDATE carts SET status = 'abandoned', updated_at = CURRENT_TIMESTAMP WHERE user_id = :user_id AND status = 'active'", { user_id: user.userId })
+      await tx.query(
+        "UPDATE carts SET status = 'abandoned', updated_at = CURRENT_TIMESTAMP WHERE user_id = :user_id AND status = 'active'",
+        { user_id: user.userId },
+      )
     })
     response.status(204).end()
   })
 
   app.get('/v1/carts/:cart_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const { id: cartId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.cart_id }, 'invalid_cart_id', 'cart_id must be a positive integer')
+    const { id: cartId } = await validate<{ id: number }>(
+      positiveIdValidator,
+      { id: request.params.cart_id },
+      'invalid_cart_id',
+      'cart_id must be a positive integer',
+    )
     const cart = await db('carts').where({ id: cartId }).first()
-    if (!cart || (cart.user_id !== user.userId && user.role !== 'admin')) throw new HttpError(404, 'cart_not_found', 'Cart not found')
+    if (!cart || (cart.user_id !== user.userId && user.role !== 'admin')) {
+      throw new HttpError(404, 'cart_not_found', 'Cart not found')
+    }
     response.setHeader('Cache-Control', 'no-store')
     response.json({ data: await cartPayload(db, cart) })
   })
