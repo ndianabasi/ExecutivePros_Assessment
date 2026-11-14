@@ -47,8 +47,9 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 - [x] Document non-secret port/origin defaults and required variable names in `.env.example`.
 - [x] On initial local setup, generate three independent cryptographically random 32-byte-or-stronger service/HMAC secrets once under ignored `.local/secrets/` files.
-- [x] Make secret files owner-readable, mount each only into its API/provider/queue consumers, and expose its path via a corresponding `*_FILE` setting.
-- [ ] Reject missing/weak secrets or conflicting direct/file secret settings before service listeners start.
+- [x] Make secret files owner-readable with POSIX `0700`/`0600` or Windows owner-only ACLs, mount each only into its API/provider/queue consumers, and expose its path via a corresponding `*_FILE` setting.
+- [x] Resolve secret-file locations on Windows, Linux, and macOS using host-native path handling and stable Compose-relative sources; keep container paths at `/run/secrets/...`.
+- [x] Reject missing/weak secrets or conflicting direct/file secret settings before service listeners start.
 - [x] Preserve existing secret files on restart; never silently rotate them.
 - [x] Fail preflight when persistent data exists but a required secret file is missing; do not generate a replacement secret over existing data.
 - [x] Keep secret values out of Git, images, public runtime config, URLs, logs, test reports, and `docker compose config` output.
@@ -138,7 +139,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 ## Recorded progress — 2026-11-14
 
-- Root deployment policy/CLI tests: `yarn test:deployment` (9 passed); root Yarn immutable install and Node syntax checks passed.
+- Root deployment policy/CLI/secret path tests: `yarn test:deployment` (15 passed); root Yarn immutable install and Node syntax checks passed. POSIX generation/idempotency/concurrency/missing-key behavior and Windows/Linux/macOS path/ACL policies were exercised in temp directories or platform simulation.
 - Compose preflight and full deploy ran on isolated projects `e2e-deployment`, `e2e-restore`, and `e2e-restore-2`, with distinct 182xx/183xx/184xx host port sets. The unrelated project holding default Mailpit port 18025 was not changed.
 - All six container images built. The final isolated project reported all six services healthy; Docker inspection confirmed non-root UIDs, read-only root filesystems, `0700` database subdirectories owned by 10001/10002/10003, and denied API/queue/provider cross-subpath reads.
 - `db:up` repeated against stopped isolated data; `stop` preserved all six containers and both persistent volumes. `db:down` refused the normal project and required explicit disposable project confirmation.

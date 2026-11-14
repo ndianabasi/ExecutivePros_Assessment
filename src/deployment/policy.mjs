@@ -32,11 +32,11 @@ export function validateDisposableTarget(project, confirmation) {
   return project
 }
 
-export function validateSecretContents(name, contents, mode) {
+export function validateSecretContents(name, contents, mode, platform = process.platform) {
   if (!Buffer.isBuffer(contents) || contents.toString('utf8').trim().length < 32) {
     throw new Error(`${name} must contain at least 32 non-whitespace bytes`)
   }
-  if ((mode & 0o077) !== 0) throw new Error(`${name} must not be group- or world-readable`)
+  if (platform !== 'win32' && (mode & 0o077) !== 0) throw new Error(`${name} must not be group- or world-readable`)
   return true
 }
 

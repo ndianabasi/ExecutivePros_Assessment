@@ -44,7 +44,7 @@ yarn status
 
 `deploy:local` checks versions, free space, pins, origins, ports and rendered Compose config; creates three independent random service/HMAC secrets if none exist; builds the six images; prepares project volume subpaths; runs API, provider, then queue initialization in removed one-shot containers; starts the six services; waits for health; and checks browser origins, API CORS/OpenAPI, and provider framing. It does not run down migrations.
 
-Secret values live only in ignored `.local/secrets/` files with owner-only access and are mounted into their service consumers. The CLI preserves them across runs. If project data exists but a secret is missing, deployment stops and asks for the original secret to be restored. Never copy secret values into `.env`, browser config, URLs, logs, reports, or commits.
+Secret values live only in ignored `.local/secrets/` files with owner-only access and are mounted into their service consumers. The first deployment generates all three automatically; repeated or concurrent deploys reuse the same values. Node resolves the repository path with the host OS path rules, while Compose resolves the relative `.local/secrets` sources from the repository on Windows, Linux, and macOS. POSIX hosts use directory mode `0700` and file mode `0600`; Windows uses `icacls` to remove inherited access and grant the current user access. Container secret paths stay `/run/secrets/...` on every host. If project data exists but a secret is missing, deployment stops and asks for the original secret to be restored. Never copy secret values into `.env`, browser config, URLs, logs, reports, or commits.
 
 ## Local endpoints
 

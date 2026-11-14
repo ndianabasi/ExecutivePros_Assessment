@@ -1,10 +1,12 @@
-import { randomBytes, createHash } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
-import { mkdir, open, readFile, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync, statfsSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { localSecretsDirectory, resolveRepositoryPath, secretPath } from './platform.mjs'
+import { initializeLocalSecrets, makeOwnerOnly } from './secret-files.mjs'
 import {
   assertPinnedAlpineDockerfiles,
   compareVersions,
@@ -71,42 +73,35 @@ function parseJsonLines(contents) {
 }
 
 function readEnvFile(value = '.env') {
-  const path = resolve(repoRoot, value)
-  if (!path.startsWith(`${repoRoot}/`) || !existsSync(path)) throw new Error('Compose env file must exist inside this repository; start with `cp .env.example .env`.')
+  let path
+  try { path = resolveRepositoryPath(repoRoot, value) } catch {
+    throw new Error('Compose env file must exist inside this repository; start with `cp .env.example .env`.')
+  }
+  if (!existsSync(path)) throw new Error('Compose env file must exist inside this repository; start with `cp .env.example .env`.')
   return path
 }
 
 async function ensureSecrets(project) {
-  const secretDirectory = join(repoRoot, '.local', 'secrets')
-  await mkdir(secretDirectory, { recursive: true, mode: 0o700 })
-  const directoryStat = await stat(secretDirectory)
-  if ((directoryStat.mode & 0o077) !== 0) throw new Error('.local/secrets must have mode 0700')
-
-  const hasData = volumeExists(volumeName(project, 'assessment_data')) || volumeExists(volumeName(project, 'mailpit_data'))
-  for (const name of requiredSecrets) {
-    const path = join(secretDirectory, name)
-    if (!existsSync(path)) {
-      if (hasData) throw new Error(`Persistent data exists for project ${project}, but .local/secrets/${name} is missing; restore the original secret instead of rotating it.`)
-      const handle = await open(path, 'wx', 0o600)
-      try { await handle.writeFile(`${randomBytes(32).toString('base64url')}\n`, 'utf8') } finally { await handle.close() }
-    }
-    const info = await stat(path)
-    validateSecretContents(name, await readFile(path), info.mode)
-  }
-  return secretDirectory
+  return initializeLocalSecrets({
+    repositoryRoot: repoRoot,
+    hasPersistentData: async () => volumeExists(volumeName(project, 'assessment_data')) || volumeExists(volumeName(project, 'mailpit_data')),
+  })
 }
 
 async function existingSecretFingerprints() {
-  const secretDirectory = join(repoRoot, '.local', 'secrets')
-  const directoryInfo = await stat(secretDirectory).catch(() => null)
-  if (!directoryInfo || (directoryInfo.mode & 0o077) !== 0) throw new Error('Restore requires the original owner-only .local/secrets directory')
+  const secretDirectory = localSecretsDirectory(repoRoot)
+  const directoryInfo = await lstat(secretDirectory).catch(() => null)
+  if (!directoryInfo?.isDirectory()) throw new Error('Restore requires the original owner-only .local/secrets directory')
+  await makeOwnerOnly(secretDirectory, true)
   const fingerprints = {}
   for (const name of requiredSecrets) {
-    const path = join(secretDirectory, name)
-    const info = await stat(path).catch(() => null)
-    if (!info) throw new Error(`Restore requires the original .local/secrets/${name}; it will not generate replacement secrets`)
+    const path = secretPath(repoRoot, name)
+    const info = await lstat(path).catch(() => null)
+    if (!info?.isFile()) throw new Error(`Restore requires the original regular file .local/secrets/${name}; it will not generate replacement secrets`)
+    await makeOwnerOnly(path, false)
+    const securedInfo = await lstat(path)
     const contents = await readFile(path)
-    validateSecretContents(name, contents, info.mode)
+    validateSecretContents(name, contents, securedInfo.mode, process.platform)
     fingerprints[name] = createHash('sha256').update(contents.toString('utf8').trim()).digest('hex')
   }
   return fingerprints
@@ -198,7 +193,10 @@ export async function preflight({ project = defaultProject, envFile: requestedEn
   run('docker', ['version', '--format', '{{.Server.Version}}'])
   const nodeVersion = process.versions.node.split('.').map(Number)
   if (compareVersions(nodeVersion, [24, 1, 0]) < 0) throw new Error('Node.js 24.1.0 or newer is required')
-  const yarnVersion = parseVersion(run('yarn', ['--version']).stdout.trim())
+  const yarn = process.platform === 'win32'
+    ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'yarn --version'])
+    : run('yarn', ['--version'])
+  const yarnVersion = parseVersion(yarn.stdout.trim())
   if (yarnVersion[0] < 4) throw new Error('Yarn 4 or newer is required')
   const freeBytes = statfsSync(repoRoot).bavail * statfsSync(repoRoot).bsize
   if (freeBytes < 1_073_741_824) throw new Error('At least 1 GiB of free workspace storage is required for image builds and cold backup')
