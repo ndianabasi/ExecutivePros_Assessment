@@ -105,6 +105,10 @@ test('browser capability completes once, signs exact bytes, and exposes only a p
   const body = fixture.api.received[0]!.body
   const digest = createHmac('sha256', fixture.config.webhookSecret).update(body).digest('hex')
   assert.equal(fixture.api.received[0]!.signature, `sha256=${digest}`)
+  const referenceDigest = createHmac('sha256', fixture.config.webhookSecret)
+    .update(`${data.reference}\n${createHash('sha256').update(body).digest('hex')}`).digest('hex')
+  assert.equal(fixture.api.received[0]!.paymentReference, data.reference)
+  assert.equal(fixture.api.received[0]!.referenceSignature, `sha256=${referenceDigest}`)
   assert.equal(JSON.parse(body.toString()).reference, data.reference)
   assert.isTrue(fixture.api.received[0]!.requestId.length > 10)
   const repeated = await submit(fixture, data.payment_url)
@@ -171,9 +175,14 @@ test('tampered-body and bad-signature scenarios preserve canonical outcome and t
   const malformed = await pay(client, fixture, 'WEBHOOK_016')
   await submit(fixture, malformed.data.payment_url)
   await waitFor(async () => fixture.api.received.length === 3)
-  assert.equal(fixture.api.received[2]!.body.toString(), '{"event_id":')
-  const digest = createHmac('sha256', fixture.config.webhookSecret).update(fixture.api.received[2]!.body).digest('hex')
+  const malformedBody = fixture.api.received[2]!.body
+  assert.equal(malformedBody.toString(), '{"event_id":')
+  const digest = createHmac('sha256', fixture.config.webhookSecret).update(malformedBody).digest('hex')
   assert.equal(fixture.api.received[2]!.signature, `sha256=${digest}`)
+  const referenceDigest = createHmac('sha256', fixture.config.webhookSecret)
+    .update(`${malformed.data.reference}\n${createHash('sha256').update(malformedBody).digest('hex')}`).digest('hex')
+  assert.equal(fixture.api.received[2]!.paymentReference, malformed.data.reference)
+  assert.equal(fixture.api.received[2]!.referenceSignature, `sha256=${referenceDigest}`)
 })
 
 test('retryable webhook responses retry as Workmatic rounds while permanent rejection resolves the job', async ({ assert, client }) => {

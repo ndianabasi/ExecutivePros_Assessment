@@ -164,3 +164,29 @@ test('WEBHOOK_013 incident remains visible after provider status reconciliation'
   assert.equal(detail.body().data.reconciliation_attempts[0].outcome, 'provider_success_reconciled')
   assert.equal(detail.body().data.reconciliation_attempts[0].provider_status, 'success')
 })
+
+test('WEBHOOK_016 persists the malformed webhook incident in payment details', async ({ assert, client }) => {
+  const { db, config } = await useApiFixture()
+  const login = await client.post('/v1/login').json({ user_id: 1 })
+  const auth = `Bearer ${login.body().data.token as string}`
+  const cart = await client.post('/v1/cart').header('Authorization', auth).json({ items: [{ product_id: 1, quantity: 1 }] })
+  assert.equal(cart.status(), 200)
+  const checkout = await client.post('/v1/cart/checkout').header('Authorization', auth)
+    .header('Idempotency-Key', 'real-provider-malformed-webhook-0001').json({ failure_scenario_code: 'WEBHOOK_016' })
+  assert.equal(checkout.status(), 201)
+  const paymentId = checkout.body().data.id as number
+  const checkoutToken = new URL(checkout.body().data.payment_url as string).pathname.split('/').at(-1)
+  const completed = await fetch(`${config.providerPublicOrigin}/payments/submit`, { method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ checkout_token: checkoutToken!, outcome: 'success' }) })
+  assert.equal(completed.status, 200)
+
+  await waitFor(async () => Boolean(await db('payment_incidents').where({ payment_id: paymentId, code: 'malformed_webhook_json' }).first()))
+  assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'pending')
+  assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).first().then((row) => Number(row?.count)), 0)
+  const detail = await client.get(`/v1/payments/${paymentId}`).header('Authorization', auth)
+  assert.equal(detail.status(), 200)
+  assert.equal(detail.body().data.incidents.length, 1)
+  assert.equal(detail.body().data.incidents[0].code, 'malformed_webhook_json')
+  assert.isNotNull(detail.body().data.incidents[0].created_at)
+})

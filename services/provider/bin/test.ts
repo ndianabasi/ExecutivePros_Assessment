@@ -46,7 +46,7 @@ async function setupProviderTest(testCase: Test) {
   let apiServer: Server | undefined
   let runtime: ReturnType<typeof createWebhookRuntime> | undefined
   let sweep: NodeJS.Timeout | undefined
-  const api = { received: [] as Array<{ body: Buffer; signature: string; requestId: string }>, responseStatus: 204 }
+  const api = { received: [] as Array<{ body: Buffer; signature: string; paymentReference: string; referenceSignature: string; requestId: string }>, responseStatus: 204 }
   try {
     await db.migrate.latest()
     await db.seed.run()
@@ -67,7 +67,9 @@ async function setupProviderTest(testCase: Test) {
     const apiApp = express()
     apiApp.use('/v1/webhooks/payment', express.raw({ type: 'application/json', limit: '32kb' }))
     apiApp.post('/v1/webhooks/payment', (request, response) => {
-      api.received.push({ body: Buffer.from(request.body as Buffer), signature: request.header('x-provider-signature') ?? '', requestId: request.header('x-request-id') ?? '' })
+      api.received.push({ body: Buffer.from(request.body as Buffer), signature: request.header('x-provider-signature') ?? '',
+        paymentReference: request.header('x-provider-payment-reference') ?? '', referenceSignature: request.header('x-provider-reference-signature') ?? '',
+        requestId: request.header('x-request-id') ?? '' })
       response.status(api.responseStatus).end()
     })
     apiServer = createServer(apiApp)

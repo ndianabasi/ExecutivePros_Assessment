@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { test } from '@japa/runner'
 import { ProviderClient } from '../../src/provider.js'
 import { createPaymentReconciler } from '../../src/reconciliation.js'
@@ -92,6 +92,34 @@ test('invalid webhook signature is emitted as an owner-scoped verification incid
   assert.deepEqual(activities.map((activity) => activity.type), ['webhook_received', 'webhook_verification_failed'])
   assert.equal(activities[1]?.payment_id, await db('payments').where({ reference }).first().then((payment) => Number(payment.id)))
   assert.include(String(activities[1]?.message), 'No payment data was applied')
+  await reader.cancel()
+})
+
+test('malformed signed webhook emits owner-scoped receipt, verification, and rejection activities', async ({ assert }) => {
+  const { db, config, apiPort } = await useApiFixture()
+  const login = await fetch(`http://127.0.0.1:${apiPort}/v1/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user_id: 1 }) })
+  const { data } = await login.json() as { data: { token: string } }
+  const reference = 'pay_sse_malformed_webhook_0001'
+  const paymentId = await createPayment(db, reference)
+  const stream = await fetch(`http://127.0.0.1:${apiPort}/v1/events`, { headers: { authorization: `Bearer ${data.token}` } })
+  const reader = stream.body!.getReader()
+  await reader.read()
+  const body = '{"event_id":'
+  const bodyHash = createHash('sha256').update(body).digest('hex')
+  const signature = createHmac('sha256', config.providerWebhookSecret).update(body).digest('hex')
+  const referenceSignature = createHmac('sha256', config.providerWebhookSecret).update(`${reference}\n${bodyHash}`).digest('hex')
+  const response = await fetch(`http://127.0.0.1:${apiPort}/v1/webhooks/payment`, { method: 'POST', body,
+    headers: { 'content-type': 'application/json', 'x-provider-signature': `sha256=${signature}`,
+      'x-provider-payment-reference': reference, 'x-provider-reference-signature': `sha256=${referenceSignature}` } })
+
+  assert.equal(response.status, 400)
+  const activities = await readActivities(reader, 3)
+  assert.deepEqual(activities.map((activity) => activity.type), ['webhook_received', 'webhook_verification_succeeded', 'webhook_result'])
+  assert.equal(activities[0]?.payment_id, paymentId)
+  assert.equal(activities[2]?.payment_id, paymentId)
+  assert.equal(activities[2]?.title, 'Malformed Webhook Rejected')
+  assert.equal(await db('payment_incidents').where({ payment_id: paymentId, code: 'malformed_webhook_json' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+  assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'pending')
   await reader.cancel()
 })
 

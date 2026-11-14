@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { test } from '@japa/runner'
 import { useApiFixture } from '../macros.js'
 
@@ -70,4 +70,49 @@ test('late provider success after terminal expiry stays failed and creates one a
   assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 0)
   assert.equal(await db('payment_incidents').where({ payment_id: paymentId, code: 'late_provider_success' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
   assert.equal(await db('notification_outbox').where({ notification_type: 'admin_incident' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+})
+
+test('validly signed malformed JSON is correlated and persisted once as a payment incident', async ({ assert, client }) => {
+  const { db, config, apiPort } = await useApiFixture()
+  const [cartId] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
+  const reference = 'pay_malformed_webhook_0001'
+  const [paymentId] = await db('payments').insert({ user_id: 1, cart_id: Number(cartId), reference, status: 'pending',
+    amount_minor: 250000, currency: 'NGN', checkout_expires_at: new Date(Date.now() + 86400000).toISOString() })
+  const body = '{"event_id":'
+  const bodyHash = createHash('sha256').update(body).digest('hex')
+  const bodySignature = createHmac('sha256', config.providerWebhookSecret).update(body).digest('hex')
+  const referenceSignature = createHmac('sha256', config.providerWebhookSecret).update(`${reference}\n${bodyHash}`).digest('hex')
+  const headers = { 'content-type': 'application/json', 'x-provider-signature': `sha256=${bodySignature}`,
+    'x-provider-payment-reference': reference, 'x-provider-reference-signature': `sha256=${referenceSignature}` }
+  const request = () => fetch(`http://127.0.0.1:${apiPort}/v1/webhooks/payment`, { method: 'POST', headers, body })
+
+  assert.equal((await request()).status, 400)
+  assert.equal((await request()).status, 400)
+  assert.equal(await db('payment_incidents').where({ payment_id: Number(paymentId), code: 'malformed_webhook_json' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+  assert.equal((await db('payments').where({ id: Number(paymentId) }).first()).status, 'pending')
+  assert.equal(await db('notification_outbox').where({ notification_type: 'admin_incident' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+
+  const login = await client.post('/v1/login').json({ user_id: 1 })
+  const detail = await client.get(`/v1/payments/${Number(paymentId)}`).header('Authorization', `Bearer ${login.body().data.token as string}`)
+  assert.equal(detail.status(), 200)
+  assert.equal(detail.body().data.incidents.length, 1)
+  assert.equal(detail.body().data.incidents[0].code, 'malformed_webhook_json')
+  assert.isNotNull(detail.body().data.incidents[0].created_at)
+})
+
+test('malformed JSON cannot be attributed using an invalid reference signature', async ({ assert }) => {
+  const { db, config, apiPort } = await useApiFixture()
+  const [cartId] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
+  const reference = 'pay_malformed_untrusted_0001'
+  const [paymentId] = await db('payments').insert({ user_id: 1, cart_id: Number(cartId), reference, status: 'pending',
+    amount_minor: 250000, currency: 'NGN', checkout_expires_at: new Date(Date.now() + 86400000).toISOString() })
+  const body = '{"event_id":'
+  const signature = createHmac('sha256', config.providerWebhookSecret).update(body).digest('hex')
+  const response = await fetch(`http://127.0.0.1:${apiPort}/v1/webhooks/payment`, { method: 'POST', body,
+    headers: { 'content-type': 'application/json', 'x-provider-signature': `sha256=${signature}`,
+      'x-provider-payment-reference': reference, 'x-provider-reference-signature': `sha256=${'0'.repeat(64)}` } })
+
+  assert.equal(response.status, 400)
+  assert.equal(await db('payment_incidents').where({ payment_id: Number(paymentId) }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 0)
+  assert.equal((await db('payments').where({ id: Number(paymentId) }).first()).status, 'pending')
 })
