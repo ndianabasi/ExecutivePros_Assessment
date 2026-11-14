@@ -25,7 +25,7 @@ The [API Service implementation document](API_Service_Implementation.md) and its
 
 Create a TypeScript/Node.js Yarn workspace with an Express HTTP server and one Workmatic `emails` queue. Keep configuration, request authentication/validation, Workmatic adapter, SMTP sender, logging, and health handling separate. Register the worker before accepting jobs; start it on every service startup. Use one queue container with worker concurrency of two.
 
-Use a persistent SQLite file at `JOBS_DB_PATH`. Workmatic's `createDatabase()` initializes and owns its internal tables. Do not write Workmatic's tables through Knex or read another service's database. Keep the service's `database/migrations` directory and Knex CLI scripts for any **service-owned** tables added later; there are none in this version. A prestart initialization command must open/create `jobs.db` and validate Workmatic's schema before the HTTP server starts. The root Commander migration flow should invoke that command alongside other services' migration steps. Production `down` migrations are prohibited. This boundary reconciles the architecture's Knex rule with Workmatic's own SQLite/Kysely implementation. [Workmatic documents its database initialization and enqueue API.](https://github.com/litepacks/workmatic)
+Use a persistent SQLite file at `JOBS_DB_PATH`. Workmatic's `createDatabase()` initializes and owns its internal tables. Do not write Workmatic's tables through Knex or read another service's database. Keep `database/migrations/README.md` to record that this service has no service-owned tables yet; do not add Knex or migration scripts until one is introduced. A prestart initialization command must open/create `jobs.db` and validate Workmatic's schema before the HTTP server starts. The root Commander migration flow should invoke that command alongside other services' migration steps. Production `down` migrations are prohibited. This boundary reconciles the architecture's Knex rule with Workmatic's own SQLite/Kysely implementation. [Workmatic documents its database initialization and enqueue API.](https://github.com/litepacks/workmatic)
 
 Implementation sequence:
 
@@ -47,6 +47,8 @@ On startup, validate config, open/initialize `jobs.db`, register the `emails` pr
 ## 4. HTTP contract
 
 `POST /jobs` is an internal service-to-service route. Require `Authorization: Bearer <QUEUE_SERVICE_SECRET>` and compare the supplied secret safely. Do not enable browser CORS. Accept JSON only, enforce a 64 KiB request-body limit, reject unknown fields, and validate before enqueue. Generate a request ID if a valid upstream ID is absent; carry it into the job payload for later logs.
+
+Use **VineJS 4.4.0** schemas for all request-data validation: the Bearer header format, optional upstream request ID, and every job field. Pre-create reusable validators with `vine.create()` (the supported non-deprecated API), reject unknown object fields through a VineJS custom rule, and map validation failures to the HTTP status contract below. Do not duplicate field validation in route handlers.
 
 The request body is:
 

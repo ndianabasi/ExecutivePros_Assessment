@@ -3,6 +3,7 @@ import type { Knex } from 'knex'
 import { authenticate, type AuthContext } from './auth.js'
 import { HttpError } from './errors.js'
 import { requestContext } from './logging.js'
+import { authorizationHeaderValidator, validate } from './validation.js'
 
 declare global {
   namespace Express {
@@ -15,9 +16,13 @@ declare global {
 export function requireAuth(db: Knex): RequestHandler {
   return async (request: Request, _response: Response, next: NextFunction) => {
     try {
-      const match = /^Bearer ([A-Za-z0-9_-]{32,})$/.exec(request.header('authorization') ?? '')
-      if (!match) throw new HttpError(401, 'unauthorized', 'A valid Bearer token is required')
-      const user = await authenticate(db, match[1]!)
+      let authorization: string
+      try {
+        authorization = (await validate<{ authorization: string }>(authorizationHeaderValidator, { authorization: request.header('authorization') ?? '' }, 'unauthorized', 'A valid Bearer token is required', 400)).authorization
+      } catch {
+        throw new HttpError(401, 'unauthorized', 'A valid Bearer token is required')
+      }
+      const user = await authenticate(db, authorization.slice('Bearer '.length))
       if (!user) throw new HttpError(401, 'unauthorized', 'The Bearer token is invalid or expired')
       request.auth = user
       const context = requestContext.getStore()

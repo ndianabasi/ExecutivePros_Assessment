@@ -1,17 +1,12 @@
-import type { Express, Request } from 'express'
+import type { Express } from 'express'
 import type { Knex } from 'knex'
 import { authenticatedUser } from './auth-middleware.js'
 import { HttpError } from './errors.js'
+import { pageQueryValidator, positiveIdValidator, validate } from './validation.js'
 
-function positiveInteger(value: unknown, name: string, fallback?: number, max = Number.MAX_SAFE_INTEGER): number {
-  const number = value === undefined && fallback !== undefined ? fallback : Number(value)
-  if (!Number.isSafeInteger(number) || number < 1 || number > max) throw new HttpError(400, `invalid_${name}`, `${name} must be a positive integer no greater than ${max}`)
-  return number
-}
-
-function pageArgs(request: Request) {
-  const page = positiveInteger(request.query.page, 'page', 1)
-  const pageSize = positiveInteger(request.query.page_size, 'page_size', 20, 100)
+function pageArgs(query: { page?: number; page_size?: number }) {
+  const page = query.page ?? 1
+  const pageSize = query.page_size ?? 20
   const offset = (page - 1) * pageSize
   if (!Number.isSafeInteger(offset)) throw new HttpError(400, 'invalid_page', 'Requested page is outside the supported range')
   return { page, pageSize, offset }
@@ -20,7 +15,8 @@ function pageArgs(request: Request) {
 export function registerPaymentReadRoutes(app: Express, db: Knex) {
   app.get('/v1/payments', async (request, response) => {
     const user = authenticatedUser(request)
-    const { page, pageSize, offset } = pageArgs(request)
+    const query = await validate<{ page?: number; page_size?: number }>(pageQueryValidator, request.query, 'invalid_pagination', 'page and page_size must be positive integers; page_size cannot exceed 100')
+    const { page, pageSize, offset } = pageArgs(query)
     const ownerFilter = user.role === 'admin' ? '' : 'WHERE p.user_id = :user_id'
     const bindings = user.role === 'admin' ? { limit: pageSize, offset } : { user_id: user.userId, limit: pageSize, offset }
     const rows = await db.raw(
@@ -37,7 +33,7 @@ export function registerPaymentReadRoutes(app: Express, db: Knex) {
 
   app.get('/v1/payments/:payment_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const paymentId = positiveInteger(request.params.payment_id, 'payment_id')
+    const { id: paymentId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.payment_id }, 'invalid_payment_id', 'payment_id must be a positive integer')
     const ownerFilter = user.role === 'admin' ? '' : 'AND p.user_id = :user_id'
     const bindings = user.role === 'admin' ? { payment_id: paymentId } : { payment_id: paymentId, user_id: user.userId }
     const payment = (await db.raw(
@@ -62,12 +58,15 @@ export function registerPaymentReadRoutes(app: Express, db: Knex) {
       `SELECT id, code, redacted_details, created_at, resolved_at FROM payment_incidents
        WHERE payment_id = :id ORDER BY id DESC`, { id: payment.id },
     ) as Array<Record<string, unknown>>
-    const { fulfillment_id: _fulfillmentId, fulfilled_at, ...safePayment } = payment
+    const safePayment = { ...payment }
+    delete safePayment.fulfillment_id
+    const fulfilledAt = safePayment.fulfilled_at
+    delete safePayment.fulfilled_at
     response.setHeader('Cache-Control', 'no-store')
     response.json({ data: {
       ...safePayment,
       cart: { id: payment.cart_id, items },
-      fulfillment: payment.fulfillment_id ? { created_at: fulfilled_at, items: fulfillmentItems } : null,
+      fulfillment: payment.fulfillment_id ? { created_at: fulfilledAt, items: fulfillmentItems } : null,
       incidents,
     } })
   })

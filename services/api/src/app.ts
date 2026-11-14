@@ -10,6 +10,7 @@ import type { ApiConfig } from './config.js'
 import { registerWebhookRoutes } from './webhooks.js'
 import { registerPaymentReadRoutes } from './payment-reads.js'
 import { requireAuth } from './auth-middleware.js'
+import { authorizationHeaderValidator, loginValidator, productQueryValidator, validate } from './validation.js'
 
 export interface AppDependencies {
   db: Knex
@@ -18,13 +19,6 @@ export interface AppDependencies {
   docsOrigin: string
   provider?: ProviderClient
   config?: ApiConfig
-}
-
-function bearer(request: Request): string | null {
-  const header = request.header('authorization')
-  if (!header) return null
-  const match = /^Bearer ([A-Za-z0-9_-]{32,})$/.exec(header)
-  return match?.[1] ?? null
 }
 
 function fail(response: Response, status: number, code: string, message: string) {
@@ -65,8 +59,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
 
   app.post('/v1/login', async (request, response, next) => {
     try {
-      const userId = request.body?.user_id
-      if (!Number.isSafeInteger(userId) || userId <= 0) return fail(response, 400, 'invalid_user_id', 'user_id must be a positive integer')
+      const { user_id: userId } = await validate<{ user_id: number }>(loginValidator, request.body, 'invalid_user_id', 'user_id must be a positive integer')
       const result = await login(db, userId)
       response.setHeader('Cache-Control', 'no-store')
       response.json({ data: { token: result.token, user: result.user } })
@@ -75,8 +68,11 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
 
   app.post('/v1/logout', async (request, response, next) => {
     try {
-      const token = bearer(request)
-      if (!token) return fail(response, 401, 'unauthorized', 'A valid Bearer token is required')
+      let authorization: string
+      try {
+        authorization = (await validate<{ authorization: string }>(authorizationHeaderValidator, { authorization: request.header('authorization') ?? '' }, 'unauthorized', 'A valid Bearer token is required')).authorization
+      } catch { return fail(response, 401, 'unauthorized', 'A valid Bearer token is required') }
+      const token = authorization.slice('Bearer '.length)
       const context = await authenticate(db, token)
       if (!context) return fail(response, 401, 'unauthorized', 'The Bearer token is invalid or expired')
       await logout(db, context.tokenId)
@@ -92,11 +88,9 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
 
   app.get('/v1/products', async (request, response, next) => {
     try {
-      const page = Number(request.query.page ?? 1)
-      const pageSize = Number(request.query.page_size ?? 20)
-      if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
-        return fail(response, 400, 'invalid_pagination', 'page must be positive and page_size must be between 1 and 100')
-      }
+      const query = await validate<{ page?: number; page_size?: number }>(productQueryValidator, request.query, 'invalid_pagination', 'page must be positive and page_size must be between 1 and 100')
+      const page = query.page ?? 1
+      const pageSize = query.page_size ?? 20
       const offset = (page - 1) * pageSize
       const data = await db.raw(
         `SELECT id, name, description, sku, price_minor, currency,

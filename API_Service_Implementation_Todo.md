@@ -5,7 +5,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 ## 1. Workspace and service foundation
 
 - [x] Create the API Service Yarn workspace with TypeScript strict mode and an Express application entry point.
-- [ ] Add workspace scripts for `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`; make every `test:*` script select its named Japa v5 suite through one entry point.
+- [x] Add workspace scripts for `lint`, `typecheck`, `test`, `test:unit`, `test:integration`, `test:contract`, `test:e2e`, and `build`; make every `test:*` script select its named Japa v5 suite through one entry point.
 - [ ] Add API-owned Knex CLI scripts for `migrate:up` and local/test-only `migrate:down`; connect them to the root Commander migration orchestration.
 - [ ] Separate routes, VineJS validators, domain services, raw-SQL repositories, provider/queue clients, background jobs, configuration, and logging.
 - [ ] Ensure API runtime code reads and writes only `api.db`, never another service's SQLite file.
@@ -19,13 +19,13 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Validate `NODE_ENV`, `PORT`, `API_DB_PATH`, `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, `PROVIDER_BASE_URL`, `PROVIDER_PUBLIC_ORIGIN`, `PROVIDER_WEBHOOK_SECRET_FILE`, `PROVIDER_SERVICE_SECRET_FILE`, `QUEUE_BASE_URL`, and `QUEUE_SERVICE_SECRET_FILE` before listening; allow direct values only for tests and reject configuring both forms.
 - [x] Load configuration with `dotenv` from repository-root `.env` for development and `.env.test` for tests; keep both ignored and provide nonsecret example files.
 - [x] Reject missing or weak secrets, invalid origins/URLs, and a database path outside the mounted API data directory.
-- [ ] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
+- [x] Load secrets only from runtime environment or mounted secret files; keep them out of seeds, images, repository files, responses, and logs.
 - [ ] Configure the 12-hour token lifetime, 5-second provider timeout, three provider-init attempts with 1-second initial backoff, and three SQLite-lock attempts with 100-millisecond initial backoff.
 - [ ] Configure reconciliation every 60 seconds after a 30-second grace period, outbox dispatch every 5 seconds, batch size 100, and payment expiry at 30 days.
 - [ ] Make intervals, attempt limits, and backoff configurable and deterministic under tests; bound backoff and add jitter in runtime.
 - [x] Store and compare timestamps in UTC.
 - [x] Enable and verify SQLite foreign keys on every connection, WAL mode, and a finite busy timeout.
-- [ ] Implement `GET /health/live` for process liveness.
+- [x] Implement `GET /health/live` for process liveness.
 - [x] Implement `GET /health/ready` for validated config, database access, and expected API migration version.
 - [ ] Keep readiness independent of provider/queue outages while reporting those outages in diagnostics and logs.
 - [ ] Restrict health endpoints to the trusted Compose network or host loopback.
@@ -151,7 +151,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 ## 11. Security, logging, diagnostics, and OpenAPI
 
 - [ ] Use fixed configured internal service URLs and authenticated outbound provider/queue calls; block arbitrary-host redirects or server-side request targets.
-- [ ] Validate and bound JSON bodies, path/query/header inputs, IDs, page sizes, quantities, idempotency keys, and scenario codes with VineJS.
+- [x] Validate and bound JSON bodies, path/query/header inputs, IDs, page sizes, quantities, idempotency keys, and scenario codes with VineJS.
 - [ ] Use named SQL value bindings throughout runtime code and avoid interpolating request data into SQL.
 - [ ] Add AsyncLocalStorage request context for validated/generated request ID, authenticated user, and role.
 - [ ] Add Pino lifecycle logs with method, path, status, auth state, user ID/role, timing, request size, and response size.
@@ -163,8 +163,8 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 12. Automated test gates — complete only after passing
 
-- [ ] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
-- [ ] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
+- [x] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
+- [x] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
 - [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
 - [x] Register Japa assert/API-client plugins centrally, configure the client base URL from `.env.test`, and expose common test helpers through macros in the Japa test context.
 - [x] Use the integration suite before hook to migrate/seed a fresh temporary SQLite file and start HTTP fixtures on distinct high ports from `.env.test` per test; return one cleanup function from the hook. Keep test bodies free of database/server provisioning.
@@ -216,3 +216,9 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Confirm the frontend sends Bearer tokens and checkout idempotency keys, keeps a key for HTTP retries, uses a new key for a new attempt, opens an Authorization-capable SSE stream, and refetches payment state after reconnect.
 - [ ] Confirm the documentation service can fetch public `/v1/api_docs.json` from its allowed CORS origin and represents Bearer and webhook-HMAC authentication separately.
 - [ ] Block API integration acceptance if any required provider/queue contract is absent; do not compensate by reading another service's database or weakening API invariants.
+
+## Current verification record
+
+- 2026-11-14: `yarn workspace @executivepros/api typecheck` and `lint` pass after moving API request validation to VineJS 4.4.0 and `vine.create()`.
+- 2026-11-14: `yarn workspace @executivepros/api test:integration` passes (10 tests) with loopback fixture binding allowed; the default sandbox attempt was blocked with `listen EPERM` on the `.env.test` port and was not counted as a test failure.
+- Still open: full API unit/contract/e2e and Compose gates, plus API checkout/webhook/outbox/SSE implementation marked unchecked above.

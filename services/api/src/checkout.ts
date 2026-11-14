@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { Express, Request } from 'express'
+import type { Express } from 'express'
 import type { Knex } from 'knex'
 import { authenticatedUser } from './auth-middleware.js'
 import { HttpError } from './errors.js'
@@ -7,15 +7,10 @@ import type { ApiConfig } from './config.js'
 import { ProviderClient, ProviderError, type ProviderPayment } from './provider.js'
 import { immediate } from './sqlite.js'
 import { logger } from './logging.js'
+import { checkoutValidator, idempotencyHeaderValidator, validate } from './validation.js'
 
 type Row = Record<string, unknown>
 type CheckoutResult = { paymentId: number; reference: string; created: boolean; alreadyMapped: boolean }
-
-function idempotencyKey(request: Request): string {
-  const key = request.header('idempotency-key') ?? ''
-  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(key)) throw new HttpError(400, 'invalid_idempotency_key', 'Idempotency-Key must contain 8 to 128 safe characters')
-  return key
-}
 
 function canonicalFingerprint(userId: number, cartId: number, scenario: string | null): string {
   return createHash('sha256').update(JSON.stringify({ user_id: userId, cart_id: cartId, failure_scenario_code: scenario })).digest('hex')
@@ -220,7 +215,7 @@ export function registerCheckoutRoutes(app: Express, db: Knex, provider: Provide
     catch { throw new HttpError(503, 'provider_unavailable', 'Failure scenarios are temporarily unavailable') }
   }
 
-  app.get('/v1/failure-scenarios', async (request, response) => {
+  app.get('/v1/failure-scenarios', async (_request, response) => {
     const available = await scenarios()
     response.setHeader('Cache-Control', 'no-store')
     response.json({ data: available })
@@ -228,15 +223,8 @@ export function registerCheckoutRoutes(app: Express, db: Knex, provider: Provide
 
   app.post('/v1/cart/checkout', async (request, response) => {
     const user = authenticatedUser(request)
-    const key = idempotencyKey(request)
-    const rawCartId = request.body?.cart_id
-    const cartId = rawCartId === undefined ? undefined : Number(rawCartId)
-    if (cartId !== undefined && (!Number.isSafeInteger(cartId) || cartId <= 0)) throw new HttpError(400, 'invalid_cart_id', 'cart_id must be a positive integer')
-    const scenario = request.body?.failure_scenario_code
-    if (Object.keys(request.body ?? {}).some((key) => !['cart_id', 'failure_scenario_code'].includes(key))) {
-      throw new HttpError(400, 'unknown_checkout_field', 'Checkout request contains an unsupported field')
-    }
-    if (scenario !== undefined && (typeof scenario !== 'string' || !/^[A-Z0-9_]{1,64}$/.test(scenario))) throw new HttpError(400, 'invalid_failure_scenario', 'failure_scenario_code is invalid')
+    const { key } = await validate<{ key: string }>(idempotencyHeaderValidator, { key: request.header('idempotency-key') ?? '' }, 'invalid_idempotency_key', 'Idempotency-Key must contain 8 to 128 safe characters')
+    const { cart_id: cartId, failure_scenario_code: scenario } = await validate<{ cart_id?: number; failure_scenario_code?: string }>(checkoutValidator, request.body ?? {}, 'invalid_checkout_request', 'Checkout request fields are invalid')
     const available = await scenarios()
     if (scenario !== undefined && !available.some((item) => item.code === scenario)) throw new HttpError(422, 'unknown_failure_scenario', 'The selected failure scenario is unavailable')
     const checkout = await resolveCheckout(db, { userId: user.userId, key, ...(cartId === undefined ? {} : { requestedCartId: cartId }), scenario: scenario ?? null })

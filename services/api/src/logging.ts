@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import pino from 'pino'
 import type { NextFunction, Request, Response } from 'express'
+import { requestIdHeaderValidator, validate } from './validation.js'
 
 interface RequestContext {
   requestId: string
@@ -18,9 +19,13 @@ export const logger = pino({
   },
 })
 
-export function requestLogging(request: Request, response: Response, next: NextFunction) {
+export async function requestLogging(request: Request, response: Response, next: NextFunction) {
   const supplied = request.header('x-request-id')?.trim() ?? ''
-  const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(supplied) ? supplied : randomUUID()
+  let requestId: string = randomUUID()
+  if (supplied) {
+    try { requestId = (await validate<{ request_id: string }>(requestIdHeaderValidator, { request_id: supplied })).request_id }
+    catch { /* Invalid caller IDs are replaced with a server-generated value. */ }
+  }
   response.setHeader('X-Request-ID', requestId)
   requestContext.run({ requestId }, () => {
     const started = process.hrtime.bigint()

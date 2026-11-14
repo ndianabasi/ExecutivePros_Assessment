@@ -20,7 +20,7 @@
     "migrate:down": "knex --knexfile knexfile.ts migrate:rollback"
   },
   "dependencies": {
-    "@vinejs/vine": "^3.0.1",
+    "@vinejs/vine": "4.4.0",
     "better-sqlite3": "^12.2.0",
     "dotenv": "18.0.10",
     "express": "^5.1.0",
@@ -34,7 +34,10 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.10",
+    "eslint": "9.39.5",
+    "globals": "17.14.0",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "8.72.2"
   }
 }

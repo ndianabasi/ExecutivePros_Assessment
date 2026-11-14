@@ -3,36 +3,10 @@ import type { Express, Request, Response } from 'express'
 import type { Knex } from 'knex'
 import { currentRequestId, logger } from './logging.js'
 import { applyPaymentEvidence, recordInvalidWebhook, type TerminalPaymentStatus } from './payment-transitions.js'
-
-interface WebhookBody {
-  event_id: string
-  event_type: string
-  status: TerminalPaymentStatus
-  reference: string
-  provider_reference?: string
-  amount: number
-  currency: string
-  occurred_at?: string
-}
+import { validate, webhookSignatureValidator, webhookValidator } from './validation.js'
 
 function error(response: Response, status: number, code: string, message: string) {
   return response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
-}
-
-function parseBody(value: unknown): WebhookBody | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const body = value as Record<string, unknown>
-  const allowed = ['event_id', 'event_type', 'status', 'reference', 'provider_reference', 'amount', 'currency', 'occurred_at']
-  if (Object.keys(body).some((key) => !allowed.includes(key))) return null
-  if (typeof body.event_id !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(body.event_id)) return null
-  if (typeof body.reference !== 'string' || !/^pay_[A-Za-z0-9_-]{16,80}$/.test(body.reference)) return null
-  if (!Number.isSafeInteger(body.amount) || Number(body.amount) <= 0 || body.currency !== 'NGN') return null
-  if (body.status !== 'success' && body.status !== 'failed' && body.status !== 'cancelled') return null
-  const expected = `payment.${body.status}`
-  if (body.event_type !== expected) return null
-  if (body.provider_reference !== undefined && (typeof body.provider_reference !== 'string' || body.provider_reference.length > 160)) return null
-  if (body.occurred_at !== undefined && (typeof body.occurred_at !== 'string' || Number.isNaN(Date.parse(body.occurred_at)))) return null
-  return body as unknown as WebhookBody
 }
 
 function busy(errorValue: unknown) {
@@ -45,7 +19,9 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string) {
     if (!Buffer.isBuffer(request.body)) return error(response, 400, 'invalid_json', 'Webhook body must be JSON')
     const rawBody = request.body as Buffer
     const signature = request.header('x-provider-signature') ?? ''
-    const supplied = /^sha256=([a-f0-9]{64})$/.exec(signature)?.[1]
+    let supplied: string | undefined
+    try { supplied = (await validate<{ signature: string }>(webhookSignatureValidator, { signature })).signature.slice('sha256='.length) }
+    catch { supplied = undefined }
     const expected = createHmac('sha256', secret).update(rawBody).digest()
     const actual = supplied ? Buffer.from(supplied, 'hex') : Buffer.alloc(0)
     const authenticated = actual.length === expected.length && timingSafeEqual(actual, expected)
@@ -61,8 +37,18 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string) {
     let decoded: unknown
     try { decoded = JSON.parse(rawBody.toString('utf8')) }
     catch { return error(response, 400, 'invalid_json', 'Webhook body must contain valid JSON') }
-    const body = parseBody(decoded)
-    if (!body) return error(response, 400, 'invalid_webhook', 'Webhook body does not match the payment event contract')
+    let body: {
+      event_id: string; event_type: string; status: TerminalPaymentStatus; reference: string;
+      provider_reference?: string; amount: number; currency: string; occurred_at?: string;
+    }
+    try {
+      body = await validate(webhookValidator, decoded, 'invalid_webhook', 'Webhook body does not match the payment event contract')
+    } catch (validationError) {
+      if (validationError instanceof Error && 'status' in validationError && validationError.status === 400) {
+        return error(response, 400, 'invalid_webhook', 'Webhook body does not match the payment event contract')
+      }
+      throw validationError
+    }
 
     try {
       const outcome = await applyPaymentEvidence(db, {

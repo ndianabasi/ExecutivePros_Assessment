@@ -1,16 +1,10 @@
 import type { Knex } from 'knex'
-import type { Request, Response } from 'express'
 import { authenticatedUser } from './auth-middleware.js'
 import { HttpError } from './errors.js'
 import { immediate, type SqliteTransaction } from './sqlite.js'
+import { cartItemUpdateValidator, cartItemsValidator, positiveIdValidator, validate } from './validation.js'
 
 type Row = Record<string, unknown>
-
-function positiveInt(value: unknown, name: string): number {
-  const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
-  if (!Number.isSafeInteger(number) || Number(number) <= 0) throw new HttpError(400, 'invalid_input', `${name} must be a positive integer`)
-  return Number(number)
-}
 
 async function activeCart(tx: SqliteTransaction, userId: number): Promise<Row | undefined> {
   return (await tx.query('SELECT * FROM carts WHERE user_id = :user_id AND status = :status', { user_id: userId, status: 'active' }))[0]
@@ -87,12 +81,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.post('/v1/cart', async (request, response) => {
     const user = authenticatedUser(request)
-    const rawItems = request.body?.items
-    if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 50) throw new HttpError(400, 'invalid_items', 'items must contain between 1 and 50 entries')
-    const items = rawItems.map((item, index) => ({
-      product_id: positiveInt(item?.product_id, `items[${index}].product_id`),
-      quantity: positiveInt(item?.quantity, `items[${index}].quantity`),
-    }))
+    const { items } = await validate<{ items: Array<{ product_id: number; quantity: number }> }>(cartItemsValidator, request.body, 'invalid_items', 'items must contain 1 to 50 products with positive integer IDs and quantities')
     const cartId = await immediate(db, async (tx) => {
       let cart = await activeCart(tx, user.userId)
       if (!cart) {
@@ -111,8 +100,8 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.patch('/v1/cart/items/:product_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const productId = positiveInt(request.params.product_id, 'product_id')
-    const quantity = positiveInt(request.body?.quantity, 'quantity')
+    const { id: productId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.product_id }, 'invalid_product_id', 'product_id must be a positive integer')
+    const { quantity } = await validate<{ quantity: number }>(cartItemUpdateValidator, request.body, 'invalid_quantity', 'quantity must be a positive integer')
     const cartId = await immediate(db, async (tx) => {
       const cart = await activeCart(tx, user.userId)
       if (!cart) throw new HttpError(404, 'cart_not_found', 'No active cart exists')
@@ -128,7 +117,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.delete('/v1/cart/items/:product_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const productId = positiveInt(request.params.product_id, 'product_id')
+    const { id: productId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.product_id }, 'invalid_product_id', 'product_id must be a positive integer')
     await immediate(db, async (tx) => {
       const cart = await activeCart(tx, user.userId)
       if (!cart) return
@@ -148,7 +137,7 @@ export function registerCartRoutes(app: import('express').Express, db: Knex) {
 
   app.get('/v1/carts/:cart_id', async (request, response) => {
     const user = authenticatedUser(request)
-    const cartId = positiveInt(request.params.cart_id, 'cart_id')
+    const { id: cartId } = await validate<{ id: number }>(positiveIdValidator, { id: request.params.cart_id }, 'invalid_cart_id', 'cart_id must be a positive integer')
     const cart = await db('carts').where({ id: cartId }).first()
     if (!cart || (cart.user_id !== user.userId && user.role !== 'admin')) throw new HttpError(404, 'cart_not_found', 'Cart not found')
     response.setHeader('Cache-Control', 'no-store')
