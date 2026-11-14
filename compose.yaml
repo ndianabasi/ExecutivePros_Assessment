@@ -53,6 +53,62 @@ services:
       timeout: 3s
       start_period: 10s
       retries: 3
+  provider:
+    build:
+      context: .
+      dockerfile: services/provider/Dockerfile
+    image: executivepros-provider:0.1.0
+    init: true
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      PROVIDER_DB_PATH: /data/payment_provider.db
+      PROVIDER_PUBLIC_ORIGIN: http://127.0.0.1:18082
+      FRONTEND_ORIGIN: http://127.0.0.1:18080
+      API_WEBHOOK_URL: http://api:3000/v1/webhooks/payment
+      PROVIDER_SERVICE_SECRET_FILE: /run/secrets/provider_service_secret
+      PROVIDER_WEBHOOK_SECRET_FILE: /run/secrets/provider_webhook_secret
+      PROVIDER_WORKER_CONCURRENCY: "2"
+      WEBHOOK_MAX_ATTEMPTS: "5"
+      WEBHOOK_RETRY_INITIAL_MS: "2000"
+      WEBHOOK_HTTP_TIMEOUT_MS: "5000"
+      WEBHOOK_JOB_TIMEOUT_MS: "10000"
+      WEBHOOK_LEASE_MS: "15000"
+      WEBHOOK_POLL_MS: "250"
+      WEBHOOK_SWEEP_INTERVAL_MS: "1000"
+    ports:
+      - "127.0.0.1:18082:3000"
+    secrets:
+      - provider_service_secret
+      - provider_webhook_secret
+    volumes:
+      - type: volume
+        source: assessment_data
+        target: /data
+        volume:
+          subpath: provider
+          nocopy: true
+    networks:
+      - assessment
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "10003:10003"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
   mailpit:
     build:
       context: ./services/mock-email
@@ -105,3 +161,7 @@ volumes:
 secrets:
   queue_service_secret:
     file: ./.local/secrets/queue_service_secret
+  provider_service_secret:
+    file: ./.local/secrets/provider_service_secret
+  provider_webhook_secret:
+    file: ./.local/secrets/provider_webhook_secret

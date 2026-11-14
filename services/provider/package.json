@@ -1,0 +1,45 @@
+{
+  "name": "@executivepros/provider",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.1.0"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "node --import=tsx bin/test.ts",
+    "test:unit": "node --import=tsx bin/test.ts unit",
+    "test:integration": "node --import=tsx bin/test.ts integration",
+    "test:contract": "node --import=tsx bin/test.ts contract",
+    "test:e2e": "node --import=tsx bin/test.ts e2e",
+    "start": "node dist/src/server.js",
+    "migrate:up": "node dist/bin/migrate.js up",
+    "migrate:down": "node dist/bin/migrate.js down",
+    "prestart": "node dist/src/initialize.js"
+  },
+  "dependencies": {
+    "@vinejs/vine": "4.4.0",
+    "better-sqlite3": "12.2.0",
+    "dotenv": "18.0.10",
+    "express": "5.1.0",
+    "knex": "3.1.0",
+    "pino": "9.7.0",
+    "workmatic": "1.2.0"
+  },
+  "devDependencies": {
+    "@japa/api-client": "3.2.1",
+    "@japa/assert": "4.2.0",
+    "@japa/runner": "5.4.0",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/express": "5.0.3",
+    "@types/node": "24.0.10",
+    "eslint": "9.39.5",
+    "globals": "17.14.0",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.72.2"
+  }
+}
