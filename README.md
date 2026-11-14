@@ -28,10 +28,49 @@ The regular Compose services are exactly `api`, `frontend`, `queue`, `docs`, `ma
 
 ## Prerequisites and clean-checkout setup
 
-- Docker Desktop with a running Engine.
-- Docker Compose `v5.2.0` or newer (required for the configured volume subpaths).
-- Node.js `24.1.0` or newer and Yarn `4.18.0` (Corepack is suitable).
-- At least 1 GiB free in the workspace filesystem; image builds and cold backups need additional room.
+### Docker Desktop
+
+Install Docker Desktop for your operating system using the official guide for [Windows](https://docs.docker.com/desktop/setup/install/windows-install/), [macOS](https://docs.docker.com/desktop/setup/install/mac-install/), or [Linux](https://docs.docker.com/desktop/setup/install/linux/). Start Docker Desktop and wait for the Engine to report that it is running before continuing.
+
+### Docker Compose
+
+Docker Desktop includes the Docker CLI, Engine, and Compose. This project requires Compose `v5.2.0` or newer for volume subpaths. Check the installed version:
+
+```sh
+docker compose version
+```
+
+If the version is older, update Docker Desktop and check again. On Linux systems using Docker Engine without Desktop, install the Compose CLI plugin by following [Docker's Linux instructions](https://docs.docker.com/compose/install/linux/). Avoid the legacy standalone Compose install.
+
+### Node.js
+
+Install Node.js `24.1.0` or newer from the official [Node.js download page](https://nodejs.org/en/download/). Use the installer for Windows or macOS; on Linux, use a supported package manager or the official platform binary. Verify the installation:
+
+```sh
+node --version
+npm --version
+```
+
+### Yarn
+
+The repository pins Yarn `4.18.0` in its `packageManager` field. Enable Corepack so it selects the repository's pinned version:
+
+```sh
+corepack enable
+yarn --version
+```
+
+Run these commands from the repository root; `yarn --version` should print `4.18.0`. If your Node.js installation does not include Corepack, install it with `npm install --global corepack`, then run `corepack enable` again. See the [Yarn Corepack guide](https://yarnpkg.com/corepack) for platform-specific notes.
+
+### Workspace and Docker storage
+
+Keep at least 1 GiB free on the filesystem containing the repository. Image builds, service data, and cold backups need additional room. Check free space with `df -h .` on macOS/Linux, or in PowerShell with:
+
+```powershell
+Get-PSDrive -Name (Get-Location).Drive.Name
+```
+
+Also ensure Docker Desktop has enough storage available for the six service images and persistent demo volumes.
 
 From the repository root:
 
