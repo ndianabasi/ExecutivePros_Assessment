@@ -80,6 +80,7 @@ async function setupApiTest(testCase: Test) {
     const providerApp = express()
     providerApp.use(express.json({ limit: '64kb' }))
     const providerInitCalls = { count: 0 }
+    const providerLookups: { status: number; payment?: Record<string, unknown>; delayMs: number; started: boolean } = { status: 404, delayMs: 0, started: false }
     providerApp.use((request, response, next) => {
       if (request.header('authorization') !== `Bearer ${'b'.repeat(32)}`) return response.sendStatus(401)
       next()
@@ -99,7 +100,12 @@ async function setupApiTest(testCase: Test) {
       checkout_expires_at: request.body.checkout_expires_at,
       } })
     })
-    providerApp.get('/payments/:reference', (_request, response) => response.sendStatus(404))
+    providerApp.get('/payments/:reference', async (request, response) => {
+      providerLookups.started = true
+      if (providerLookups.delayMs) await new Promise((resolveDelay) => setTimeout(resolveDelay, providerLookups.delayMs))
+      if (providerLookups.status !== 200 || !providerLookups.payment) return response.sendStatus(providerLookups.status)
+      return response.json({ data: { ...providerLookups.payment, reference: request.params.reference } })
+    })
     providerServer = createServer(providerApp).listen(providerTestPort, '127.0.0.1')
     const providerUrl = await listen(providerServer, providerTestPort)
 
@@ -131,7 +137,7 @@ async function setupApiTest(testCase: Test) {
     })
     apiServer = createServer(apiApp).listen(apiTestPort, '127.0.0.1')
     await listen(apiServer, apiTestPort)
-    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls, apiPort: apiTestPort, queue,
+    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls, providerLookups, apiPort: apiTestPort, queue,
       dispatchOutbox: () => dispatcher.dispatchDue() }
     testCase.context.apiFixture = apiFixture
     return async () => {
@@ -236,7 +242,8 @@ async function setupRealProviderE2E(testCase: Test) {
     })
     apiServer = createServer(apiApp)
     await listen(apiServer, apiTestPort)
-    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls: { count: 0 }, apiPort: apiTestPort }
+    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls: { count: 0 },
+      providerLookups: { status: 404, delayMs: 0, started: false }, apiPort: apiTestPort }
     testCase.context.apiFixture = apiFixture
     return async () => {
       await close(apiServer!)
@@ -276,7 +283,11 @@ configure({
         suite.onTest((testCase) => testCase.setup(setupApiTest))
       },
     },
-    { name: 'contract', files: ['tests/contract/**/*.spec.ts'] },
+    {
+      name: 'contract',
+      files: ['tests/contract/**/*.spec.ts'],
+      configure(suite) { suite.onTest((testCase) => testCase.setup(setupApiTest)) },
+    },
     {
       name: 'e2e',
       files: ['tests/e2e/**/*.spec.ts'],

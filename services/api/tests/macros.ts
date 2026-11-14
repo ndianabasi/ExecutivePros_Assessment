@@ -6,6 +6,7 @@ export interface ApiTestFixture {
   db: Knex
   config: ApiConfig
   providerInitCalls: { count: number }
+  providerLookups: { status: number; payment?: Record<string, unknown>; delayMs: number; started: boolean }
   apiPort: number
   queue?: { requests: Array<{ authorization: string; requestId: string; body: Record<string, unknown> }>; responseStatus: number }
   dispatchOutbox?: () => Promise<void>

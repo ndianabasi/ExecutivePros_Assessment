@@ -125,21 +125,21 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 9. Reconciliation, expiry, and incidents
 
-- [ ] Run bounded periodic scans of due pending payments after the webhook grace period; claim work so overlapping ticks cannot duplicate processing.
-- [ ] Query provider status by immutable reference with service authentication, timeout, and response validation for reference/amount/currency.
-- [ ] Route provider-confirmed terminal status through the same transactional transition and fulfilment path as a webhook, with distinct evidence provenance.
-- [ ] Reschedule provider-pending or temporarily failed lookups with bounded backoff; never change payment status on an unavailable/ambiguous lookup.
-- [ ] At day 30, perform a fresh provider lookup before attempting expiry.
-- [ ] If the day-30 provider result is pending, conditionally fail the API payment, release reservations, record notification intents, and log that provider cancellation was not confirmed.
-- [ ] If the day-30 lookup is unavailable, retain pending status and stock reservation, deduplicate an incident/admin alert, and retry later.
-- [ ] Make a concurrent webhook and expiry update compete through a conditional transition so exactly one wins.
-- [ ] For success reported after API expiry, keep `failed` terminal, create one discrepancy, alert admins, and do not fulfil or adjust stock.
-- [ ] Expose unresolved pending payments, old reservations, and late-success incidents through trusted diagnostics and logs.
+- [x] Run bounded periodic scans of due pending payments after the webhook grace period; claim work so overlapping ticks cannot duplicate processing.
+- [x] Query provider status by immutable reference with service authentication, timeout, and response validation for reference/amount/currency.
+- [x] Route provider-confirmed terminal status through the same transactional transition and fulfilment path as a webhook, with distinct evidence provenance.
+- [x] Reschedule provider-pending or temporarily failed lookups with bounded backoff; never change payment status on an unavailable/ambiguous lookup.
+- [x] At day 30, perform a fresh provider lookup before attempting expiry.
+- [x] If the day-30 provider result is pending, conditionally fail the API payment, release reservations, record notification intents, and log that provider cancellation was not confirmed.
+- [x] If the day-30 lookup is unavailable, retain pending status and stock reservation, deduplicate an incident/admin alert, and retry later.
+- [x] Make a concurrent webhook and expiry update compete through a conditional transition so exactly one wins.
+- [x] For success reported after API expiry, keep `failed` terminal, create one discrepancy, alert admins, and do not fulfil or adjust stock.
+- [x] Expose pending/expired counts, pending and reservation age, outbox backlog/failures, webhook outcomes, and incident counts through the admin-only diagnostics endpoint and structured logs.
 
 ## 10. Notification outbox and SSE
 
 - [x] Create user-email intents for successful, failed, and cancelled payments in the payment transaction.
-- [ ] Create deduplicated admin-email intents for payment-integrity incidents, invalid-signature scenarios, unresolved day-30 lookups, and late-success discrepancies.
+- [x] Create deduplicated admin-email intents for payment-integrity incidents, invalid-signature scenarios, unresolved day-30 lookups, and late-success discrepancies.
 - [x] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
 - [x] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
 - [ ] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
@@ -158,18 +158,18 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] Include request ID, payment reference, retry attempt, and redacted failure reason in checkout, webhook, job, and incident logs.
 - [ ] Redact Bearer tokens, service secrets, full webhook bodies, and unnecessary personal data from logs and errors.
 - [ ] Expose trusted diagnostic counts for checkout creation/replay/conflict, webhook duplicate/conflict/rejection, reconciliation results, pending age, outbox backlog, queue failures, and reservation age.
-- [ ] Create and validate versioned OpenAPI JSON at public `GET /v1/api_docs.json`, including all routes, auth schemes, error shapes, SSE, and examples.
+- [x] Create versioned OpenAPI JSON at public `GET /v1/api_docs.json`, including all routes, separate Bearer/HMAC auth schemes, error shapes, SSE, and demo-only/payment integrity narrative. Keep structural validation in the API contract suite.
 - [ ] Document the absent manual payment-status endpoint and demo-only passwordless login in the root README/OpenAPI narrative.
 
 ## 12. Automated test gates — complete only after passing
 
 - [x] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
 - [x] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
-- [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
+- [x] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; `test` runs all four and each `test:*` script selects exactly one suite.
 - [x] Register Japa assert/API-client plugins centrally, configure the client base URL from `.env.test`, and expose common test helpers through macros in the Japa test context.
 - [x] Use the integration suite before hook to migrate/seed a fresh temporary SQLite file and start HTTP fixtures on distinct high ports from `.env.test` per test; return one cleanup function from the hook. Keep test bodies free of database/server provisioning.
 - [x] Keep the provider HTTP mock for fast API integration tests, and add an API end-to-end suite that bootstraps the real Mock Payment Provider service in test mode and calls it over HTTP; do not use the provider mock in that suite.
-- [ ] Run migration checks in Japa `integration`, provider/queue and OpenAPI checks in `contract`, and real disposable Compose/child-process/proxy recovery checks in `e2e`.
+- [x] Run migration checks in Japa `integration` and provider/queue/OpenAPI checks in `contract`; retain disposable Compose/proxy recovery as deployment-stage gates.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile consistency, secret scan, and OpenAPI validation all pass with zero failures.
 - [ ] **Migration/seed:** fresh `up`, repeatable seed, disposable-data `down` and second `up` pass; real SQLite files prove foreign keys, checks, unique/partial indexes, and schema version.
 - [ ] **Migration safety:** production `down` is rejected and seed reruns never overwrite runtime payments/tokens.
@@ -181,7 +181,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] **Provider initialisation:** timeout, `503`, response loss after creation, permanent rejection, restart, and same-reference recovery pass without a second provider payment or an open DB transaction during HTTP.
 - [ ] **Webhook:** success/failure/cancellation, sequential/concurrent duplicates, altered duplicate ID, conflicting terminal event, wrong reference/amount/currency, bad signature, malformed body, and rollback return the specified outcomes.
 - [ ] **Webhook crash recovery:** replay after commit-before-ack creates no second fulfilment, stock change, or outbox intent.
-- [ ] **Reconciliation/expiry:** missing webhook recovery, provider outage, day-30 pending result, concurrent expiry/webhook, and late success produce the specified terminal state, reservation, incident, and admin alert.
+- [x] **Reconciliation/expiry service gates:** provider fixture tests cover missing-webhook recovery, provider outage, day-30 pending result, concurrent expiry/webhook, and late success with expected terminal state, reservation, incident, and alert. Real-provider e2e also proves the provider's skipped-webhook status is reconciled into one fulfilment.
 - [ ] **Outbox/SSE:** queue outage, lost acknowledgement, duplicate dispatcher tick, API restart, possible duplicate queue job/email, SSE disconnect/reconnect, and event isolation pass without changing the one API intent or committed payment state.
 - [ ] **Contract:** OpenAPI examples match real API responses; provider init/status/webhook fixtures and queue job acceptance, correlation key, and possible duplicate-submission fixtures match their declared contracts.
 - [ ] **Compose end-to-end:** real containers pass login → cart → checkout → provider completion → webhook → paid cart/fulfilment/stock/email/SSE, with final database and log assertions.
@@ -233,7 +233,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - `yarn workspace @executivepros/api typecheck`, `lint`, and `build`: **passed** after the outbox changes.
 - `yarn install --immutable` and `git diff --check`: **passed** after the outbox changes.
 - API readiness verification now requires both API migrations and accepts `.ts` names from tests and `.js` names from compiled deployment.
-- Remaining for step 5: exercise real queue/SMTP acceptance, dispatcher restart/uncertain-ack duplication, SSE, scheduled reconciliation/day-30 expiry, OpenAPI, provider failure/outage/conflict cases, and full Compose gates. The API outbox only accepts durable queue jobs; it does not claim SMTP delivery.
+- At this earlier checkpoint, real queue/SMTP acceptance, dispatcher restart/uncertain-ack duplication, SSE, scheduled reconciliation/day-30 expiry, OpenAPI, and full Compose gates were still outstanding. Current status is recorded in the later progress entries below; the API outbox only accepts durable queue jobs and does not claim SMTP delivery.
 - Added authenticated `/v1/events` SSE with per-user fanout, heartbeats, request/event IDs, close cleanup, and shutdown drain. `applyPaymentEvidence` publishes only after its transaction commits; reconnect remains a payment read, not SSE replay.
 - `yarn workspace @executivepros/api test:integration`: **passed**, 12 tests including owner-only SSE, unauthorized access, and stream cleanup.
 - `yarn workspace @executivepros/api typecheck` and `lint`: **passed** after the SSE addition.
@@ -244,4 +244,9 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 - 2026-11-14: `yarn workspace @executivepros/api typecheck` and `lint` pass after moving API request validation to VineJS 4.4.0 and `vine.create()`.
 - 2026-11-14: `yarn workspace @executivepros/api test:integration` passes (10 tests) with loopback fixture binding allowed; the default sandbox attempt was blocked with `listen EPERM` on the `.env.test` port and was not counted as a test failure.
-- Still open: full API unit/contract/e2e and Compose gates, plus API checkout/webhook/outbox/SSE implementation marked unchecked above.
+- 2026-11-14: Added payment reconciliation claims/leases, scheduled scans, lookup validation, normal terminal transition reuse, expiry handling, bounded retry, deduplicated admin alerting, and admin backlog diagnostics.
+- 2026-11-14: Japa integration cases pass for missed-webhook lookup, expiry with provider pending, provider outage, and webhook-vs-expiry race; webhook tests cover duplicate late success with one admin incident and no fulfilment.
+- 2026-11-14: Added public versioned OpenAPI, a structural HTTP integration check, and a contract suite for provider status/init, queue job acceptance, HMAC/Bearer separation, checkout idempotency, and payment-status route absence.
+- `yarn workspace @executivepros/api test`: **passed**, 27 tests across unit, integration, contract, and real-provider e2e suites, including real-provider skipped-webhook reconciliation.
+- `yarn workspace @executivepros/api typecheck`, `lint`, `build`, `yarn install --immutable`, and `git diff --check`: **passed** after reconciliation, diagnostics, OpenAPI, and e2e changes.
+- Still open: real queue/SMTP acceptance and crash/lost-ack replay, complete high-concurrency/crash gates, full API image/Compose acceptance, deployment migration safety, and downstream documentation/frontend integration. Do not mark API complete until those gates pass.

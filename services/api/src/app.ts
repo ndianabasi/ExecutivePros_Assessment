@@ -13,6 +13,8 @@ import { requireAuth } from './auth-middleware.js'
 import { authorizationHeaderValidator, loginValidator, productQueryValidator, validate } from './validation.js'
 import { PaymentEventHub } from './payment-events.js'
 import { registerPaymentEventRoutes } from './sse.js'
+import { registerDiagnosticRoutes } from './diagnostics.js'
+import { apiOpenApiDocument } from './openapi.js'
 
 export interface AppDependencies {
   db: Knex
@@ -53,6 +55,11 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
   app.get('/health/ready', async (_request: Request, response: Response) => {
     if (!(await isReady())) return response.status(503).json({ status: 'not_ready' })
     return response.status(200).json({ status: 'ready' })
+  })
+
+  app.get('/v1/api_docs.json', (_request, response) => {
+    response.setHeader('Cache-Control', 'public, max-age=60')
+    response.json(apiOpenApiDocument(config?.apiPublicOrigin ?? 'http://127.0.0.1:3000'))
   })
 
   app.get('/v1/demo/users', async (_request, response) => {
@@ -110,6 +117,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
 
   registerCartRoutes(app, db)
   registerPaymentReadRoutes(app, db)
+  registerDiagnosticRoutes(app, db)
   if (provider && config) registerCheckoutRoutes(app, db, provider, config)
   if (config) {
     registerPaymentEventRoutes(app, db, eventHub, config)

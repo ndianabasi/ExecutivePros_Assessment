@@ -49,3 +49,24 @@ test('signed payment success commits fulfilment, stock consumption, and one emai
     assert.equal(invalidSignature.status(), 401)
     assert.equal(await db('payment_incidents').count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 2)
 })
+
+test('late provider success after terminal expiry stays failed and creates one admin incident', async ({ assert, client }) => {
+  const { db, config } = await useApiFixture()
+  const [cartIdRaw] = await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 })
+  const [paymentIdRaw] = await db('payments').insert({ user_id: 1, cart_id: Number(cartIdRaw), reference: 'pay_late_success0001',
+    status: 'failed', amount_minor: 250000, currency: 'NGN', checkout_expires_at: new Date(0).toISOString(), completed_at: new Date().toISOString() })
+  const paymentId = Number(paymentIdRaw)
+  const event = { event_id: 'provider-late-success-0001', event_type: 'payment.success', status: 'success', reference: 'pay_late_success0001',
+    provider_reference: 'provider-late-success', amount: 250000, currency: 'NGN', occurred_at: new Date().toISOString() }
+  const signature = `sha256=${createHmac('sha256', config.providerWebhookSecret).update(JSON.stringify(event)).digest('hex')}`
+
+  const first = await client.post('/v1/webhooks/payment').header('X-Provider-Signature', signature).json(event)
+  const duplicate = await client.post('/v1/webhooks/payment').header('X-Provider-Signature', signature).json(event)
+
+  assert.equal(first.body().data.outcome, 'late_success')
+  assert.equal(duplicate.body().data.outcome, 'duplicate')
+  assert.equal((await db('payments').where({ id: paymentId }).first()).status, 'failed')
+  assert.equal(await db('fulfillments').where({ payment_id: paymentId }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 0)
+  assert.equal(await db('payment_incidents').where({ payment_id: paymentId, code: 'late_provider_success' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+  assert.equal(await db('notification_outbox').where({ notification_type: 'admin_incident' }).count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 1)
+})

@@ -228,6 +228,7 @@ export function registerCheckoutRoutes(app: Express, db: Knex, provider: Provide
     const available = await scenarios()
     if (scenario !== undefined && !available.some((item) => item.code === scenario)) throw new HttpError(422, 'unknown_failure_scenario', 'The selected failure scenario is unavailable')
     const checkout = await resolveCheckout(db, { userId: user.userId, key, ...(cartId === undefined ? {} : { requestedCartId: cartId }), scenario: scenario ?? null })
+    logger.info({ payment_reference: checkout.reference, checkout_outcome: checkout.created ? 'created' : checkout.alreadyMapped ? 'idempotency_replay' : 'pending_attempt_reused' }, 'checkout request resolved')
     await initialisePayment(db, provider, config, checkout.paymentId, checkout.reference, config.providerPublicOrigin)
     const payment = await db('payments').where({ id: checkout.paymentId }).first()
     if (!payment) throw new Error('Checkout payment disappeared')

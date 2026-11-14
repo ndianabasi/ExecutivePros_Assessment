@@ -63,7 +63,11 @@ export class ProviderClient {
 
   async lookup(reference: string): Promise<ProviderPayment> {
     const body = await this.request<{ data: ProviderPayment }>(`/payments/${encodeURIComponent(reference)}`)
-    if (!body.data || body.data.reference !== reference) throw new ProviderError('Provider status response did not match the reference', true)
+    if (!body.data || body.data.reference !== reference || !Number.isSafeInteger(body.data.amount) || body.data.amount <= 0 ||
+        typeof body.data.currency !== 'string' || !['pending', 'success', 'failed', 'cancelled'].includes(body.data.status) ||
+        typeof body.data.checkout_expires_at !== 'string') {
+      throw new ProviderError('Provider status response did not match the expected payment contract', true)
+    }
     return body.data
   }
 }

@@ -179,6 +179,55 @@ export async function applyPaymentEvidence(db: Knex, evidence: PaymentEvidence, 
   return outcome
 }
 
+/** A fresh provider lookup reporting pending at the immutable checkout deadline expires the API attempt. */
+export async function expirePendingPayment(db: Knex, input: {
+  paymentId: number
+  reference: string
+  amount: number
+  currency: string
+  evidenceHash: string
+}, eventHub?: PaymentEventHub): Promise<boolean> {
+  let committedEvent: PaymentStatusEvent | undefined
+  let committedUserId: number | undefined
+  const expired = await immediate(db, async (tx) => {
+    const payment = (await tx.query<{
+      id: number; user_id: number; cart_id: number; reference: string; status: string; amount_minor: number; currency: string;
+    }>('SELECT id, user_id, cart_id, reference, status, amount_minor, currency FROM payments WHERE id = :id', { id: input.paymentId }))[0]
+    if (!payment || payment.status !== 'pending' || payment.reference !== input.reference) return false
+    if (Number(payment.amount_minor) !== input.amount || payment.currency !== input.currency) {
+      await insertEvidence(tx, { source: 'reconciliation', evidenceHash: input.evidenceHash,
+        reference: input.reference, status: 'failed', amount: input.amount, currency: input.currency }, Number(payment.id), 'expiry_lookup_mismatch')
+      await createIncident(tx, {
+        dedupeKey: `expiry_mismatch:${payment.id}`, paymentId: Number(payment.id), reference: payment.reference,
+        code: 'provider_amount_currency_mismatch', details: 'Expiry status lookup did not match the stored amount or currency',
+      })
+      return false
+    }
+    await insertEvidence(tx, { source: 'reconciliation', evidenceHash: input.evidenceHash,
+      reference: input.reference, status: 'failed', amount: input.amount, currency: input.currency }, Number(payment.id), 'expired_provider_pending')
+    const changed = await tx.query<{ id: number }>(
+      `UPDATE payments SET status = 'failed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE id = :id AND status = 'pending' RETURNING id`, { id: payment.id },
+    )
+    if (changed.length !== 1) return false
+    await tx.query("UPDATE stock_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP WHERE payment_id = :id AND status = 'active'", { id: payment.id })
+    await createUserNotification(tx, payment, 'failed')
+    await createIncident(tx, {
+      dedupeKey: `expired_pending:${payment.id}`, paymentId: Number(payment.id), reference: payment.reference,
+      code: 'payment_expired_provider_pending',
+      details: 'Payment reached its checkout expiry while the provider still reported pending; provider cancellation was not confirmed',
+    })
+    committedEvent = { payment_id: Number(payment.id), reference: payment.reference, status: 'failed',
+      request_id: currentRequestId() ?? 'reconciliation', event_id: null }
+    committedUserId = Number(payment.user_id)
+    logger.warn({ payment_reference: payment.reference, payment_status: 'failed', evidence_source: 'reconciliation' },
+      'pending provider payment expired without provider cancellation confirmation')
+    return true
+  })
+  if (expired && committedEvent && committedUserId !== undefined) eventHub?.publish(committedUserId, committedEvent)
+  return expired
+}
+
 export async function recordInvalidWebhook(db: Knex, bodyHash: string) {
   await immediate(db, async (tx) => createIncident(tx, {
     dedupeKey: `invalid_signature:${bodyHash}`, code: 'invalid_webhook_signature', details: 'A provider webhook failed HMAC authentication',

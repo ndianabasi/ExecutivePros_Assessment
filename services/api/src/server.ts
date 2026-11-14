@@ -7,17 +7,20 @@ import { createEmailQueueClient } from './queue.js'
 import { createNotificationOutboxDispatcher } from './notification-outbox.js'
 import { logger } from './logging.js'
 import { PaymentEventHub } from './payment-events.js'
+import { createPaymentReconciler } from './reconciliation.js'
 
 const config = loadConfig()
 const db = createDatabase(config.dbPath)
 const outbox = createNotificationOutboxDispatcher(db, createEmailQueueClient(config), config)
 const eventHub = new PaymentEventHub()
+const provider = new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs)
+const reconciler = createPaymentReconciler(db, provider, config, eventHub)
 const app = createApp({
   db,
   isReady: () => verifyDatabase(db),
   frontendOrigin: config.frontendOrigin,
   docsOrigin: config.docsOrigin,
-  provider: new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs),
+  provider,
   config,
   eventHub,
 })
@@ -27,9 +30,13 @@ const server = app.listen(config.port, '0.0.0.0', () => {
 })
 
 void outbox.dispatchDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'notification outbox startup sweep failed'))
+void reconciler.runDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'payment reconciliation startup sweep failed'))
 const outboxTimer = setInterval(() => {
   void outbox.dispatchDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'notification outbox sweep failed'))
 }, config.outboxIntervalMs)
+const reconciliationTimer = setInterval(() => {
+  void reconciler.runDue().catch((error) => logger.error({ error_type: error instanceof Error ? error.name : 'unknown' }, 'payment reconciliation sweep failed'))
+}, config.reconcileIntervalMs)
 
 let stopping = false
 async function shutdown(signal: string) {
@@ -37,11 +44,13 @@ async function shutdown(signal: string) {
   stopping = true
   logger.info({ signal }, 'API shutdown started')
   clearInterval(outboxTimer)
+  clearInterval(reconciliationTimer)
   const hardStop = setTimeout(() => { logger.error({ grace_ms: 25000 }, 'API shutdown grace period expired'); process.exit(1) }, 25000)
   hardStop.unref()
   eventHub.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   await outbox.close()
+  await reconciler.close()
   await db.destroy()
   clearTimeout(hardStop)
   logger.info('API shutdown complete')

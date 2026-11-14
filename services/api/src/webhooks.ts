@@ -57,6 +57,8 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
         status: body.status, amount: body.amount, currency: body.currency,
         ...(body.provider_reference ? { providerReference: body.provider_reference } : {}),
       }, eventHub)
+      logger.info({ request_id: currentRequestId(), payment_reference: body.reference, provider_event_id: body.event_id,
+        webhook_outcome: outcome }, 'provider webhook processed')
       if (outcome === 'mismatch' || outcome === 'not_found') return error(response, 422, 'payment_evidence_mismatch', 'Signed provider evidence does not match a local payment')
       if (outcome === 'conflict') return error(response, 409, 'event_id_conflict', 'Provider event ID was already used with different content')
       response.status(200).json({ data: { accepted: true, outcome } })
