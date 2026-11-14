@@ -7,6 +7,7 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 ## Durable decisions
 
 - Source formatting and linting are monorepo-owned: root `eslint.config.js`, `.prettierrc.json`, and `.prettierignore` apply to all `services/*/src` directories. Use `yarn lint`, `yarn format:services`, and `yarn format:check:services`; do not recreate per-service ESLint configs. Keep curly-braced control flow and multi-line JSDoc on source functions, classes, and methods.
+- Every declared function, class, and method in service source must have a multi-line JSDoc comment. Describe its purpose and behavior; document each parameter and return value when present, plus important side effects, invariants, or failure behavior. Keep comments specific to the implementation rather than using generic placeholder descriptions.
 - Husky is installed at the monorepo root and runs `lint-staged` before commits. Staged JS/TS service source is formatted, auto-fixed by ESLint, then lint-checked; staged service CSS is formatted. Keep this hook scoped to changed files under `services/*/src`.
 - Trusted host-local demo only. Bind browser ports to `127.0.0.1`; keep service calls on Compose DNS.
 - Every published host port must be at least `10000`; `.env` is the sole source of host port assignments (`FRONTEND_PORT`, `DOCS_PORT`, `PROVIDER_PORT`, `API_PORT`, `MAILPIT_PORT`). Compose derives all loopback browser origins from those values. Never add separately maintained loopback origin variables to `.env`; internal service calls use Compose DNS.
