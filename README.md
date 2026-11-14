@@ -86,14 +86,14 @@ Secret values live only in ignored `.local/secrets/` files with owner-only acces
 
 ## Local endpoints
 
-| Service | Browser URL | Container endpoint | Notes |
-| --- | --- | --- | --- |
-| Frontend | `http://127.0.0.1:<FRONTEND_PORT>` | `frontend:8080` | Storefront and payment views |
-| API docs | `http://127.0.0.1:<DOCS_PORT>` | `docs:8080` | Swagger UI; live OpenAPI comes from API |
-| Mock provider | `http://127.0.0.1:<PROVIDER_PORT>` | `provider:3000` | Browser checkout and internal authenticated API |
-| API | `http://127.0.0.1:<API_PORT>` | `api:3000` | OpenAPI: `http://127.0.0.1:<API_PORT>/v1/api_docs.json` |
-| Mailpit | `http://127.0.0.1:<MAILPIT_PORT>` | UI `mailpit:8025`; SMTP `mailpit:1025` | SMTP is private to Compose |
-| Queue | — | `queue:3000` | Private HTTP; no published port |
+| Service       | Browser URL                        | Container endpoint                     | Notes                                                   |
+| ------------- | ---------------------------------- | -------------------------------------- | ------------------------------------------------------- |
+| Frontend      | `http://127.0.0.1:<FRONTEND_PORT>` | `frontend:8080`                        | Storefront and payment views                            |
+| API docs      | `http://127.0.0.1:<DOCS_PORT>`     | `docs:8080`                            | Swagger UI; live OpenAPI comes from API                 |
+| Mock provider | `http://127.0.0.1:<PROVIDER_PORT>` | `provider:3000`                        | Browser checkout and internal authenticated API         |
+| API           | `http://127.0.0.1:<API_PORT>`      | `api:3000`                             | OpenAPI: `http://127.0.0.1:<API_PORT>/v1/api_docs.json` |
+| Mailpit       | `http://127.0.0.1:<MAILPIT_PORT>`  | UI `mailpit:8025`; SMTP `mailpit:1025` | SMTP is private to Compose                              |
+| Queue         | —                                  | `queue:3000`                           | Private HTTP; no published port                         |
 
 Compose service names are for server-to-server traffic only. Browser configuration uses loopback origins derived by Compose from the five host port variables in `.env` (`FRONTEND_PORT`, `DOCS_PORT`, `PROVIDER_PORT`, `API_PORT`, and `MAILPIT_PORT`). When assigning alternate ports, change only those port values. Deployment preflight rejects duplicate or low host ports and verifies every derived origin against the corresponding published port.
 
@@ -189,13 +189,3 @@ yarn stop --project e2e-assessment --env-file .local/e2e-assessment.env
 The project uses separate named volumes. Remove them only after review with `yarn db:down --project e2e-assessment --confirm-project e2e-assessment`.
 
 The API e2e suite starts independent provider/queue services and a disposable Mailpit container; it needs Docker. Mailpit is validated using its pinned source-built image, HTTP readiness/API, and real SMTP messages. All browser/integration tests that mutate payments must use a unique Compose project, separate volumes and unused loopback ports. Never target the default demo data with a test suite.
-
-## Recorded verification and remaining acceptance
-
-Verified on 2026-11-14 in this checkout: root deployment policy/CLI tests (9 passed); Docker Compose `v5.2.0` rendered exactly six services with loopback bindings and subpaths; all six images built and all six isolated services passed health; API/provider/queue initialization and repeat `db:up` succeeded; API CORS, provider frame policy, live OpenAPI URL, browser runtime origins, and provider API authentication passed deployment postflight; the frontend Playwright suite passed 6/6 on an isolated restored project; the API docs browser suite passed 4/4 on deployed docs/API origins, including direct live Try it out; a successful payment produced Mailpit messages; stop preserved volumes; and cold backup, checksum verification, new-volume SQLite integrity checks, and startup from restored data passed.
-
-These results do **not** constitute complete assessment acceptance. The root test/deployment checklist records broader outage/recovery and crash-window tests, full cross-service permission checks, source/transcript review, and reviewer walkthrough as open where not yet exercised. Check [Deployment_and_Documentation_Implementation_Todo.md](Deployment_and_Documentation_Implementation_Todo.md) and each service checklist for current status and commands. A build, partial smoke, or this recorded subset is not a substitute for the remaining gates.
-
-## Assessment handoff
-
-The source repository URL and a separately reviewed full chronological AI-assistance transcript must accompany the final assessment. The transcript must include prompts **and** responses, be reviewed for secrets/personal data, and be supplied as a separate artifact named `ExecutivePros_Assessment_AI_Transcript.md`; it must not be committed here. The repository URL and transcript artifact have not been filled in by this implementation record. Keep **S1 Submission** unchecked until they are supplied and reviewed. The incremental history uses Conventional Commits; inspect `git log --oneline` for the work completed so far.
