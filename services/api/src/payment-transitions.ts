@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import type { Knex } from 'knex'
 import { immediate, type SqliteTransaction } from './sqlite.js'
-import { logger } from './logging.js'
+import { currentRequestId, logger } from './logging.js'
+import type { PaymentEventHub, PaymentStatusEvent } from './payment-events.js'
 
 export type TerminalPaymentStatus = 'success' | 'failed' | 'cancelled'
 export interface PaymentEvidence {
@@ -80,8 +81,10 @@ async function insertEvidence(tx: SqliteTransaction, evidence: PaymentEvidence, 
   )
 }
 
-export async function applyPaymentEvidence(db: Knex, evidence: PaymentEvidence): Promise<TransitionResult> {
-  return immediate(db, async (tx) => {
+export async function applyPaymentEvidence(db: Knex, evidence: PaymentEvidence, eventHub?: PaymentEventHub): Promise<TransitionResult> {
+  let committedEvent: PaymentStatusEvent | undefined
+  let committedUserId: number | undefined
+  const outcome = await immediate(db, async (tx) => {
     if (evidence.eventId) {
       const existing = (await tx.query<{ evidence_hash: string }>('SELECT evidence_hash FROM provider_events WHERE event_id = :id', { id: evidence.eventId }))[0]
       if (existing) return existing.evidence_hash === evidence.evidenceHash ? 'duplicate' : 'conflict'
@@ -166,9 +169,14 @@ export async function applyPaymentEvidence(db: Knex, evidence: PaymentEvidence):
       await tx.query("UPDATE stock_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP WHERE payment_id = :id AND status = 'active'", { id: payment.id })
     }
     await createUserNotification(tx, payment, evidence.status)
+    committedEvent = { payment_id: Number(payment.id), reference: payment.reference, status: evidence.status,
+      request_id: currentRequestId() ?? 'unknown', event_id: evidence.eventId ?? null }
+    committedUserId = Number(payment.user_id)
     logger.info({ payment_reference: payment.reference, payment_status: evidence.status, evidence_source: evidence.source, provider_event_id: evidence.eventId ?? null }, 'payment transition committed')
     return 'processed'
   })
+  if (outcome === 'processed' && committedEvent && committedUserId !== undefined) eventHub?.publish(committedUserId, committedEvent)
+  return outcome
 }
 
 export async function recordInvalidWebhook(db: Knex, bodyHash: string) {

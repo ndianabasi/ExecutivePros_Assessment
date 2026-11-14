@@ -6,10 +6,12 @@ import { ProviderClient } from './provider.js'
 import { createEmailQueueClient } from './queue.js'
 import { createNotificationOutboxDispatcher } from './notification-outbox.js'
 import { logger } from './logging.js'
+import { PaymentEventHub } from './payment-events.js'
 
 const config = loadConfig()
 const db = createDatabase(config.dbPath)
 const outbox = createNotificationOutboxDispatcher(db, createEmailQueueClient(config), config)
+const eventHub = new PaymentEventHub()
 const app = createApp({
   db,
   isReady: () => verifyDatabase(db),
@@ -17,6 +19,7 @@ const app = createApp({
   docsOrigin: config.docsOrigin,
   provider: new ProviderClient(config.providerBaseUrl, config.providerServiceSecret, config.providerTimeoutMs),
   config,
+  eventHub,
 })
 
 const server = app.listen(config.port, '0.0.0.0', () => {
@@ -36,6 +39,7 @@ async function shutdown(signal: string) {
   clearInterval(outboxTimer)
   const hardStop = setTimeout(() => { logger.error({ grace_ms: 25000 }, 'API shutdown grace period expired'); process.exit(1) }, 25000)
   hardStop.unref()
+  eventHub.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   await outbox.close()
   await db.destroy()

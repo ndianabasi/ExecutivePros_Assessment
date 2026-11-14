@@ -143,10 +143,10 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [x] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
 - [x] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
 - [ ] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
-- [ ] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped status events, heartbeat, and disconnect cleanup.
-- [ ] Publish SSE only after payment commit; keep payment outcome independent of SSE or email failure.
-- [ ] Include payment ID, reference, status, and request/event ID in SSE events without leaking another user's data to admin streams.
-- [ ] Support client reconnect by making `GET /v1/payments/:payment_id` authoritative for current state; do not put Bearer tokens in SSE URLs.
+- [x] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped status events, heartbeat, and disconnect cleanup.
+- [x] Publish SSE only after payment commit; keep payment outcome independent of SSE or email failure.
+- [x] Include payment ID, reference, status, and request/event ID in SSE events without leaking another user's data to admin streams.
+- [x] Support client reconnect by making `GET /v1/payments/:payment_id` authoritative for current state; do not put Bearer tokens in SSE URLs.
 
 ## 11. Security, logging, diagnostics, and OpenAPI
 
@@ -234,6 +234,11 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - `yarn install --immutable` and `git diff --check`: **passed** after the outbox changes.
 - API readiness verification now requires both API migrations and accepts `.ts` names from tests and `.js` names from compiled deployment.
 - Remaining for step 5: exercise real queue/SMTP acceptance, dispatcher restart/uncertain-ack duplication, SSE, scheduled reconciliation/day-30 expiry, OpenAPI, provider failure/outage/conflict cases, and full Compose gates. The API outbox only accepts durable queue jobs; it does not claim SMTP delivery.
+- Added authenticated `/v1/events` SSE with per-user fanout, heartbeats, request/event IDs, close cleanup, and shutdown drain. `applyPaymentEvidence` publishes only after its transaction commits; reconnect remains a payment read, not SSE replay.
+- `yarn workspace @executivepros/api test:integration`: **passed**, 12 tests including owner-only SSE, unauthorized access, and stream cleanup.
+- `yarn workspace @executivepros/api typecheck` and `lint`: **passed** after the SSE addition.
+- `yarn workspace @executivepros/api test`: **passed**, 18 tests after the SSE addition.
+- `yarn workspace @executivepros/api build`: **passed** after the SSE addition.
 
 ## Current verification record
 

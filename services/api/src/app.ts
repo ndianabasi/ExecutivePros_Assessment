@@ -11,6 +11,8 @@ import { registerWebhookRoutes } from './webhooks.js'
 import { registerPaymentReadRoutes } from './payment-reads.js'
 import { requireAuth } from './auth-middleware.js'
 import { authorizationHeaderValidator, loginValidator, productQueryValidator, validate } from './validation.js'
+import { PaymentEventHub } from './payment-events.js'
+import { registerPaymentEventRoutes } from './sse.js'
 
 export interface AppDependencies {
   db: Knex
@@ -19,13 +21,14 @@ export interface AppDependencies {
   docsOrigin: string
   provider?: ProviderClient
   config?: ApiConfig
+  eventHub?: PaymentEventHub
 }
 
 function fail(response: Response, status: number, code: string, message: string) {
   return response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
 }
 
-export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, config }: AppDependencies): Express {
+export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, config, eventHub = new PaymentEventHub() }: AppDependencies): Express {
   const app = express()
   app.disable('x-powered-by')
   app.use(requestLogging)
@@ -108,7 +111,10 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
   registerCartRoutes(app, db)
   registerPaymentReadRoutes(app, db)
   if (provider && config) registerCheckoutRoutes(app, db, provider, config)
-  if (config) registerWebhookRoutes(app, db, config.providerWebhookSecret)
+  if (config) {
+    registerPaymentEventRoutes(app, db, eventHub, config)
+    registerWebhookRoutes(app, db, config.providerWebhookSecret, eventHub)
+  }
 
   app.use((_request: Request, response: Response) => {
     response.status(404).json({ error: { code: 'not_found', message: 'Route not found', request_id: currentRequestId() } })

@@ -4,6 +4,7 @@ import type { Knex } from 'knex'
 import { currentRequestId, logger } from './logging.js'
 import { applyPaymentEvidence, recordInvalidWebhook, type TerminalPaymentStatus } from './payment-transitions.js'
 import { validate, webhookSignatureValidator, webhookValidator } from './validation.js'
+import type { PaymentEventHub } from './payment-events.js'
 
 function error(response: Response, status: number, code: string, message: string) {
   return response.status(status).json({ error: { code, message, request_id: currentRequestId() } })
@@ -14,7 +15,7 @@ function busy(errorValue: unknown) {
     typeof errorValue.code === 'string' && (errorValue.code.includes('SQLITE_BUSY') || errorValue.code.includes('SQLITE_LOCKED'))
 }
 
-export function registerWebhookRoutes(app: Express, db: Knex, secret: string) {
+export function registerWebhookRoutes(app: Express, db: Knex, secret: string, eventHub?: PaymentEventHub) {
   app.post('/v1/webhooks/payment', async (request: Request, response: Response) => {
     if (!Buffer.isBuffer(request.body)) return error(response, 400, 'invalid_json', 'Webhook body must be JSON')
     const rawBody = request.body as Buffer
@@ -55,7 +56,7 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string) {
         source: 'webhook', eventId: body.event_id, evidenceHash: bodyHash, reference: body.reference,
         status: body.status, amount: body.amount, currency: body.currency,
         ...(body.provider_reference ? { providerReference: body.provider_reference } : {}),
-      })
+      }, eventHub)
       if (outcome === 'mismatch' || outcome === 'not_found') return error(response, 422, 'payment_evidence_mismatch', 'Signed provider evidence does not match a local payment')
       if (outcome === 'conflict') return error(response, 409, 'event_id_conflict', 'Provider event ID was already used with different content')
       response.status(200).json({ data: { accepted: true, outcome } })

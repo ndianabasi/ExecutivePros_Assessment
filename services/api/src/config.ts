@@ -27,6 +27,7 @@ export interface ApiConfig {
   outboxIntervalMs: number
   jobBatchSize: number
   paymentExpiryDays: number
+  sseHeartbeatMs: number
 }
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -109,6 +110,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     outboxIntervalMs: boundedInteger(env, 'OUTBOX_INTERVAL_MS', 5000, 100, 3600000),
     jobBatchSize: boundedInteger(env, 'JOB_BATCH_SIZE', 100, 1, 1000),
     paymentExpiryDays: boundedInteger(env, 'PAYMENT_EXPIRY_DAYS', 30, 1, 365),
+    sseHeartbeatMs: boundedInteger(env, 'SSE_HEARTBEAT_MS', 15000, 50, 120000),
   }
   if (config.outboxRetryInitialMs > config.outboxRetryMaxMs) throw new Error('OUTBOX_RETRY_INITIAL_MS cannot exceed OUTBOX_RETRY_MAX_MS')
   return config
