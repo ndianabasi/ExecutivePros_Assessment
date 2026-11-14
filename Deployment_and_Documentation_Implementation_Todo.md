@@ -53,11 +53,11 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [x] Preserve existing secret files on restart; never silently rotate them.
 - [x] Fail preflight when persistent data exists but a required secret file is missing; do not generate a replacement secret over existing data.
 - [x] Keep secret values out of Git, images, public runtime config, URLs, logs, test reports, and `docker compose config` output.
-- [x] Set frontend browser config to API `http://127.0.0.1:18083`, provider `http://127.0.0.1:18082`, docs `http://127.0.0.1:18081`, and Mailpit `http://127.0.0.1:18025`.
-- [x] Set docs browser `API_ORIGIN` to `http://127.0.0.1:18083` and verify the live OpenAPI effective server URL matches it exactly.
-- [x] Add/pass `API_PUBLIC_ORIGIN=http://127.0.0.1:18083` as the API's OpenAPI server URL configuration contract.
-- [x] Set API `FRONTEND_ORIGIN` and `DOCS_ORIGIN` to the published browser origins; use internal `http://provider:3000` and `http://queue:3000` for outbound service calls.
-- [x] Set provider public origin and frontend origin to browser URLs; set its fixed webhook target to `http://api:3000/v1/webhooks/payment`.
+- [x] Keep host port numbers as the sole authority in `.env`; derive every loopback browser origin in Compose and validate/probe those derived origins in the deployment manager.
+- [x] Set frontend browser config to API, provider, docs, and Mailpit origins derived from their corresponding `*_PORT` values.
+- [x] Set docs browser `API_ORIGIN` and API's OpenAPI server URL from `API_PORT`; verify the live OpenAPI effective server URL matches it exactly.
+- [x] Derive API frontend, docs, and provider browser origins from the matching host port values; keep outbound API calls on internal Compose DNS addresses.
+- [x] Derive provider public and frontend origins from their host port values; set its fixed webhook target to `http://api:3000/v1/webhooks/payment`.
 - [x] Set queue SMTP target to `mailpit:1025`; configure Mailpit's local UI host allowlist without adding browser API CORS.
 - [x] Verify API CORS allows only the frontend/docs origins and required `Authorization`, `Content-Type`, and `Idempotency-Key` methods/headers.
 - [x] Verify frontend `connect-src`/`frame-src`, provider `frame-ancestors`, docs `connect-src`, and browser link targets match the configured origins.
@@ -66,7 +66,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 ## 4. Root deployment workflow and data safety
 
-- [x] Validate Docker/Compose and Yarn/Node prerequisites, selected Compose project, host port availability, disk space, image pins/digests, secrets, and origins before deployment.
+- [x] Validate Docker/Compose and Yarn/Node prerequisites, selected Compose project, host port availability and uniqueness, disk space, image pins/digests, secrets, and port-derived origins before deployment.
 - [x] Render and validate `docker compose config` without printing secret values.
 - [x] Build all six images before running migrations or exposing the new stack.
 - [x] Create/verify the shared volume subpaths and Mailpit volume before starting service-owned migration jobs.

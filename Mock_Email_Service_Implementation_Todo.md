@@ -20,9 +20,9 @@ Source of truth: [Mock_Email_Service_Implementation.md](Mock_Email_Service_Imple
 - [ ] Attach Mailpit and the queue to the trusted Compose network; set the queue's Mailpit destination to `SMTP_HOST=mailpit`, `SMTP_PORT=1025`.
 - [ ] Keep SMTP plain and unauthenticated on that network; publish no SMTP host port.
 - [x] Set `MP_SMTP_BIND_ADDR=0.0.0.0:1025` and `MP_SMTP_MAX_RECIPIENTS=1`.
-- [x] Set `MP_UI_BIND_ADDR=0.0.0.0:8025` and publish only `127.0.0.1:18025:8025` on the host.
+- [x] Set `MP_UI_BIND_ADDR=0.0.0.0:8025` and publish only `127.0.0.1:${MAILPIT_PORT}:8025` on the host.
 - [x] Set `MP_ALLOWED_HOSTS=mailpit` and verify host-local loopback access works.
-- [ ] Set frontend `MAILPIT_ORIGIN=http://127.0.0.1:18025`; verify it is a browser URL, not a Compose hostname.
+- [x] Derive frontend `MAILPIT_ORIGIN` from `.env`'s authoritative `MAILPIT_PORT`; verify it is a browser URL, not a Compose hostname.
 - [ ] Keep the frontend integration to a new-tab Mailpit UI link; add no embedded UI or browser Mailpit API calls.
 - [ ] Keep SMTP/UI auth and TLS unset only for the agreed host-local trusted demo.
 - [x] Leave `MP_API_CORS`, SMTP relay, SMTP forwarding, Send API auth overrides, and POP3 credentials unset; configure no real-mail destination.

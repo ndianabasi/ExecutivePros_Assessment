@@ -50,14 +50,14 @@ Secret values live only in ignored `.local/secrets/` files with owner-only acces
 
 | Service | Browser URL | Container endpoint | Notes |
 | --- | --- | --- | --- |
-| Frontend | `http://127.0.0.1:18080` | `frontend:8080` | Storefront and payment views |
-| API docs | `http://127.0.0.1:18081` | `docs:8080` | Swagger UI; live OpenAPI comes from API |
-| Mock provider | `http://127.0.0.1:18082` | `provider:3000` | Browser checkout and internal authenticated API |
-| API | `http://127.0.0.1:18083` | `api:3000` | OpenAPI: `http://127.0.0.1:18083/v1/api_docs.json` |
-| Mailpit | `http://127.0.0.1:18025` | UI `mailpit:8025`; SMTP `mailpit:1025` | SMTP is private to Compose |
+| Frontend | `http://127.0.0.1:<FRONTEND_PORT>` | `frontend:8080` | Storefront and payment views |
+| API docs | `http://127.0.0.1:<DOCS_PORT>` | `docs:8080` | Swagger UI; live OpenAPI comes from API |
+| Mock provider | `http://127.0.0.1:<PROVIDER_PORT>` | `provider:3000` | Browser checkout and internal authenticated API |
+| API | `http://127.0.0.1:<API_PORT>` | `api:3000` | OpenAPI: `http://127.0.0.1:<API_PORT>/v1/api_docs.json` |
+| Mailpit | `http://127.0.0.1:<MAILPIT_PORT>` | UI `mailpit:8025`; SMTP `mailpit:1025` | SMTP is private to Compose |
 | Queue | — | `queue:3000` | Private HTTP; no published port |
 
-Compose service names are for server-to-server traffic only. Browser configuration uses the loopback origins above. Port and origin settings are in `.env.example`; when assigning alternate ports, change both the `*_PORT` and matching public origin values. Deployment preflight rejects mismatches and non-loopback origins.
+Compose service names are for server-to-server traffic only. Browser configuration uses loopback origins derived by Compose from the five host port variables in `.env` (`FRONTEND_PORT`, `DOCS_PORT`, `PROVIDER_PORT`, `API_PORT`, and `MAILPIT_PORT`). When assigning alternate ports, change only those port values. Deployment preflight rejects duplicate or low host ports and verifies every derived origin against the corresponding published port.
 
 ## Operations
 
@@ -135,7 +135,7 @@ yarn workspace @executivepros/api-docs test:e2e
 yarn test:deployment
 ```
 
-For the root Compose smoke, make a nonsecret env file from `.env.example`, assign an unused loopback port set of your own (all at least `10000`), and update every matching public origin. Then run:
+For the root Compose smoke, make a nonsecret env file from `.env.example` and assign a unique unused loopback port to each `*_PORT` variable (all at least `10000`). Compose derives the matching public origins automatically. Then run:
 
 ```sh
 yarn deploy:local --project e2e-assessment --env-file .local/e2e-assessment.env

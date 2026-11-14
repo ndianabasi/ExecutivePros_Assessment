@@ -4,7 +4,7 @@ This service is a static Swagger UI shell for the trusted local assessment demo.
 
 ## Local runtime
 
-Compose publishes the UI at `http://127.0.0.1:18081` and sets browser-visible `API_ORIGIN` to `http://127.0.0.1:18083`. The API must allow that docs origin through CORS. Do not set `API_ORIGIN` to a Compose-only DNS name such as `api`.
+Compose publishes the UI at `http://127.0.0.1:<DOCS_PORT>` and derives browser-visible `API_ORIGIN` from `API_PORT`. The API must allow that docs origin through CORS. Do not set `API_ORIGIN` to a Compose-only DNS name such as `api`.
 
 The seeded-user picker is passwordless and stores the selected demo Bearer token in this browser origin's local storage. Use only in the trusted assessment environment. Swagger requests can mutate demo carts and create payments. Paste the generated checkout key into the required `Idempotency-Key` field; reuse it after an uncertain checkout result and generate a new key for a new attempt after confirmed failure or cancellation.
 
@@ -33,7 +33,7 @@ docker compose stop api-docs
 docker compose logs --tail=100 api-docs
 ```
 
-The docs server logs contain static request and startup diagnostics only; bearer tokens and checkout keys must never be logged. Verify startup with `docker compose ps api-docs` and open `http://127.0.0.1:18081` in a browser.
+The docs server logs contain static request and startup diagnostics only; bearer tokens and checkout keys must never be logged. Verify startup with `docker compose ps docs` and open `http://127.0.0.1:<DOCS_PORT>` in a browser.
 
 ## Runtime and rollback
 

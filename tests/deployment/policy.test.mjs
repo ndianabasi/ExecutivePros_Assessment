@@ -57,6 +57,7 @@ test('validates exactly six services with loopback high ports and private servic
   assert.throws(() => inspectComposeConfig({ services: { ...config.services, extra: {} } }), /exactly these six/)
   assert.throws(() => inspectComposeConfig(composeConfig({ api: { ports: [{ host_ip: '0.0.0.0', published: '18083', target: 3000 }] } })), /127.0.0.1/)
   assert.throws(() => inspectComposeConfig(composeConfig({ api: { ports: [{ host_ip: '127.0.0.1', published: '8083', target: 3000 }] } })), /below 10000/)
+  assert.throws(() => inspectComposeConfig(composeConfig({ api: { ports: [{ host_ip: '127.0.0.1', published: '18080', target: 3000 }] } })), /Host port 18080 is published more than once/)
   assert.throws(() => inspectComposeConfig(composeConfig({ queue: { ports: [{ host_ip: '127.0.0.1', published: '18084', target: 3000 }] } })), /Queue HTTP/)
   assert.throws(() => inspectComposeConfig(composeConfig({ mailpit: { ports: [{ host_ip: '127.0.0.1', published: '11025', target: 1025 }] } })), /SMTP/)
 })

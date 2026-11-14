@@ -17,7 +17,6 @@ RUN apk add --no-cache nginx=1.30.6-r0 nodejs=24.22.3-r0 && \
     mkdir -p /usr/share/nginx/html /tmp && chown -R 10004:10004 /usr/share/nginx/html /tmp
 COPY --from=build --chown=10004:10004 /workspace/services/api-docs/build/ /usr/share/nginx/html/
 COPY --chown=10004:10004 services/api-docs/scripts/startup.mjs /opt/docs/startup.mjs
-ENV API_ORIGIN=http://127.0.0.1:18083
 USER 10004:10004
 EXPOSE 8080/tcp
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health/ready"]

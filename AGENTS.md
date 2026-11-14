@@ -7,7 +7,7 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 ## Durable decisions
 
 - Trusted host-local demo only. Bind browser ports to `127.0.0.1`; keep service calls on Compose DNS.
-- Every published host port must be at least `10000`; current assignments are frontend `18080`, docs `18081`, provider `18082`, API `18083`, and Mailpit UI `18025`. Container ports and private SMTP/test ports remain service-specific.
+- Every published host port must be at least `10000`; `.env` is the sole source of host port assignments (`FRONTEND_PORT`, `DOCS_PORT`, `PROVIDER_PORT`, `API_PORT`, `MAILPIT_PORT`). Compose derives all loopback browser origins from those values. Never add separately maintained loopback origin variables to `.env`; internal service calls use Compose DNS.
 - On this Docker Desktop setup, Compose `internal: true` prevented a loopback-published Mailpit UI from accepting host connections. Use the project-scoped bridge network and publish only explicit loopback host ports; keep SMTP unpublished.
 - Six regular services: API, frontend, queue, docs, Mailpit, provider. One Dockerfile and one running container per service. One-shot setup/migration containers must be removed.
 - One project-scoped SQLite volume uses distinct `api`, `queue`, and `provider` volume subpaths. Each non-root service sees only its own `/data`; Mailpit has a separate volume.

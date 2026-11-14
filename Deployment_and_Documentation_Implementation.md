@@ -25,11 +25,11 @@ Define one project-scoped Compose bridge network for container-to-container call
 
 | Compose service | Container endpoint | Host endpoint | Persistent data and health |
 | --- | --- | --- | --- |
-| `frontend` | HTTP container `8080`, host `18080` | `http://127.0.0.1:18080` | No database; its own static/config health check. |
-| `api` | HTTP container `3000`, host `18083` | `http://127.0.0.1:18083` | `assessment_data` subpath `api` at `/data`, `API_DB_PATH=/data/api.db`; `/health/live` and `/health/ready`. |
-| `provider` | HTTP container `3000`, host `18082` | `http://127.0.0.1:18082` | Subpath `provider` at `/data`, `PROVIDER_DB_PATH=/data/payment_provider.db`; `/health/live` and `/health/ready`. |
-| `docs` | HTTP container `8080`, host `18081` | `http://127.0.0.1:18081` | No database; `/health/live` and `/health/ready`. |
-| `mailpit` | UI/API `8025`, SMTP `1025` | UI/API `http://127.0.0.1:18025` only | `mailpit_data`; `/livez` and `/readyz`. SMTP is not host-published. |
+| `frontend` | HTTP container `8080`, host `FRONTEND_PORT` | `http://127.0.0.1:<FRONTEND_PORT>` | No database; its own static/config health check. |
+| `api` | HTTP container `3000`, host `API_PORT` | `http://127.0.0.1:<API_PORT>` | `assessment_data` subpath `api` at `/data`, `API_DB_PATH=/data/api.db`; `/health/live` and `/health/ready`. |
+| `provider` | HTTP container `3000`, host `PROVIDER_PORT` | `http://127.0.0.1:<PROVIDER_PORT>` | Subpath `provider` at `/data`, `PROVIDER_DB_PATH=/data/payment_provider.db`; `/health/live` and `/health/ready`. |
+| `docs` | HTTP container `8080`, host `DOCS_PORT` | `http://127.0.0.1:<DOCS_PORT>` | No database; `/health/live` and `/health/ready`. |
+| `mailpit` | UI/API `8025`, SMTP `1025` | UI/API `http://127.0.0.1:<MAILPIT_PORT>` only | `mailpit_data`; `/livez` and `/readyz`. SMTP is not host-published. |
 | `queue` | HTTP `3000` | None | Subpath `queue` at `/data`, `JOBS_DB_PATH=/data/jobs.db`; `/health/live` and `/health/ready`. |
 
 The root CLI must create `assessment_data` and its three subdirectories **before** Compose mounts `volume.subpath`; those paths must already exist. Use a removed, exact Alpine-pinned setup container mounting the volume root to create `api`, `queue`, and `provider` with distinct fixed service UIDs/GIDs (`10001`, `10002`, `10003`) and mode `0700`. The parent directory must not be writable by service users. The regular Compose mounts use long-form `volume.subpath` with `nocopy: true` to expose only the owned directory at `/data`; no service can read another database through its mount. The documented local baseline is Docker Compose `v5.2.0`; preflight must fail if the installed version cannot render and mount these subpaths. Verify with `docker compose config` and a real mount test. [Compose volume subpaths](https://docs.docker.com/reference/compose-file/services/#volumes) retain the service documents' `/data/<database>.db` paths while sharing one backup unit.
@@ -40,14 +40,16 @@ Keep top-level named volumes project-scoped so disposable end-to-end projects ne
 
 Ship `.env.example` with non-secret defaults, port/origin descriptions, and required variable names. The root local deployment automatically generates three independent cryptographically random 32-byte or stronger secret values once into ignored `.local/secrets/` files: provider service authentication, provider webhook HMAC, and queue service authentication. Creation is idempotent, including concurrent local starts; existing values are reused. Resolve the repository and secret paths with each host's native path rules. Compose uses repository-relative `./.local/secrets/...` file sources on Windows, Linux, and macOS, while mounted container paths remain `/run/secrets/...`. POSIX hosts enforce directory/file modes `0700`/`0600`; Windows removes inherited ACLs and grants the current user access with `icacls`. Mount only each required file into the API, provider, or queue through Compose secrets; expose paths through corresponding `*_FILE` settings. Each service reads its file before listening and rejects missing/weak secrets or conflicting direct and file values. Never commit, bake, print, or place these values in browser `/config.json`, URLs, logs, test reports, or `docker compose config` output. Existing secret files must not be silently rotated on restart; if persistent data exists but a required secret file is missing, fail preflight instead of generating a replacement.
 
+`.env` is the sole source of published host port assignments: `FRONTEND_PORT`, `DOCS_PORT`, `PROVIDER_PORT`, `API_PORT`, and `MAILPIT_PORT`. Do not duplicate these as loopback origin variables. Compose derives each browser-facing origin as `http://127.0.0.1:<published-port>` for frontend, docs, API, provider, and Mailpit. The deployment manager validates each derived origin against the corresponding published port and uses those derived values for deployment probes. Internal service calls use fixed Compose DNS addresses and container ports.
+
 The root configuration maps browser origins and internal addresses separately:
 
 | Consumer | Required value |
 | --- | --- |
-| Frontend runtime config | `API_ORIGIN=http://127.0.0.1:18083`, `PROVIDER_ORIGIN=http://127.0.0.1:18082`, `DOCS_ORIGIN=http://127.0.0.1:18081`, `MAILPIT_ORIGIN=http://127.0.0.1:18025`. |
-| Docs runtime config | `API_ORIGIN=http://127.0.0.1:18083`; the live OpenAPI effective server URL must match exactly. |
-| API runtime config | `FRONTEND_ORIGIN=http://127.0.0.1:18080`, `DOCS_ORIGIN=http://127.0.0.1:18081`, `PROVIDER_BASE_URL=http://provider:3000`, `QUEUE_BASE_URL=http://queue:3000`. Supply `API_PUBLIC_ORIGIN=http://127.0.0.1:18083` to render the browser-reachable OpenAPI `servers` value; this is a required API configuration contract to add alongside its existing settings. |
-| Provider runtime config | `PROVIDER_PUBLIC_ORIGIN=http://127.0.0.1:18082`, `FRONTEND_ORIGIN=http://127.0.0.1:18080`, `API_WEBHOOK_URL=http://api:3000/v1/webhooks/payment`. |
+| Frontend runtime config | Compose derives `API_ORIGIN`, `PROVIDER_ORIGIN`, `DOCS_ORIGIN`, and `MAILPIT_ORIGIN` from `API_PORT`, `PROVIDER_PORT`, `DOCS_PORT`, and `MAILPIT_PORT`. |
+| Docs runtime config | Compose derives `API_ORIGIN` from `API_PORT`; the live OpenAPI effective server URL must match exactly. |
+| API runtime config | Compose derives `API_PUBLIC_ORIGIN`, `FRONTEND_ORIGIN`, `DOCS_ORIGIN`, and `PROVIDER_PUBLIC_ORIGIN` from the corresponding host port variables. Internal calls use fixed `http://provider:3000` and `http://queue:3000`. |
+| Provider runtime config | Compose derives `PROVIDER_PUBLIC_ORIGIN` and `FRONTEND_ORIGIN` from `PROVIDER_PORT` and `FRONTEND_PORT`; webhook target is fixed at `http://api:3000/v1/webhooks/payment`. |
 | Queue and Mailpit | Queue uses `SMTP_HOST=mailpit`, `SMTP_PORT=1025`; Mailpit listens internally on `1025` and `8025` and allows only the expected local UI host. |
 
 Check API CORS for the frontend and docs origins and `Authorization`, `Content-Type`, and `Idempotency-Key`; do not add browser CORS to Mailpit. Verify frontend `connect-src`/`frame-src`, provider `frame-ancestors`, and docs `connect-src` against these origins. The frontend's docs/Mailpit links open the configured browser URLs; the provider URL given to the browser uses its public origin; service-to-service authentication uses the fixed internal URLs. A wrong-origin OpenAPI document or provider URL blocks the browser flow rather than being silently rewritten.

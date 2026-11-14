@@ -148,37 +148,26 @@ async function checkHostPorts(project, config) {
   for (const port of ports) await checkPortAvailable(port, project)
 }
 
-function validateOrigins(config) {
+export function validateOrigins(config) {
+  const loopbackOrigin = (service) => `http://127.0.0.1:${config.services[service].ports?.[0]?.published}`
   const expected = [
-    ['frontend', 'API_ORIGIN', 'api', 'API_PUBLIC_ORIGIN'],
-    ['frontend', 'PROVIDER_ORIGIN', 'provider', 'PROVIDER_PUBLIC_ORIGIN'],
-    ['frontend', 'DOCS_ORIGIN', 'docs', null],
-    ['frontend', 'MAILPIT_ORIGIN', 'mailpit', null],
-    ['docs', 'API_ORIGIN', 'api', 'API_PUBLIC_ORIGIN'],
+    ['frontend', 'API_ORIGIN', 'api'],
+    ['frontend', 'PROVIDER_ORIGIN', 'provider'],
+    ['frontend', 'DOCS_ORIGIN', 'docs'],
+    ['frontend', 'MAILPIT_ORIGIN', 'mailpit'],
+    ['docs', 'API_ORIGIN', 'api'],
+    ['api', 'API_PUBLIC_ORIGIN', 'api'],
+    ['api', 'FRONTEND_ORIGIN', 'frontend'],
+    ['api', 'DOCS_ORIGIN', 'docs'],
+    ['api', 'PROVIDER_PUBLIC_ORIGIN', 'provider'],
+    ['provider', 'PROVIDER_PUBLIC_ORIGIN', 'provider'],
+    ['provider', 'FRONTEND_ORIGIN', 'frontend'],
   ]
-  for (const [consumer, key, targetService, targetKey] of expected) {
-    const origin = config.services[consumer].environment[key]
-    const url = new URL(origin)
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') throw new Error(`${consumer}.${key} must be a browser-reachable loopback HTTP origin`)
-    const port = Number(config.services[targetService].ports?.[0]?.published)
-    if (Number(url.port) !== port) throw new Error(`${consumer}.${key} does not match the published ${targetService} port`)
-    if (targetKey && config.services[targetService].environment[targetKey] !== origin) throw new Error(`${consumer}.${key} differs from ${targetService}.${targetKey}`)
-  }
-  for (const service of ['api', 'provider']) {
-    const originKey = service === 'api' ? 'API_PUBLIC_ORIGIN' : 'PROVIDER_PUBLIC_ORIGIN'
-    const frontOrigin = service === 'api' ? config.services.api.environment.FRONTEND_ORIGIN : config.services.provider.environment.FRONTEND_ORIGIN
-    if (frontOrigin !== config.services.frontend.environment.API_ORIGIN.replace(/:\d+$/, `:${config.services.frontend.ports[0].published}`)) {
-      throw new Error(`${service}.FRONTEND_ORIGIN must match the configured frontend browser origin`)
+  for (const [consumer, key, targetService] of expected) {
+    const expectedOrigin = loopbackOrigin(targetService)
+    if (config.services[consumer].environment[key] !== expectedOrigin) {
+      throw new Error(`${consumer}.${key} must be derived from the published ${targetService} port (${expectedOrigin})`)
     }
-    if (service === 'api') {
-      const docsOrigin = `http://127.0.0.1:${config.services.docs.ports[0].published}`
-      if (config.services.api.environment.DOCS_ORIGIN !== docsOrigin) throw new Error('api.DOCS_ORIGIN must match the configured docs browser origin')
-    }
-    const publicOrigin = config.services[service].environment[originKey]
-    if (Number(new URL(publicOrigin).port) !== Number(config.services[service].ports?.[0]?.published)) throw new Error(`${service}.${originKey} does not match its published port`)
-  }
-  if (config.services.api.environment.PROVIDER_PUBLIC_ORIGIN !== config.services.provider.environment.PROVIDER_PUBLIC_ORIGIN) {
-    throw new Error('api.PROVIDER_PUBLIC_ORIGIN must match the provider browser origin')
   }
   return true
 }
@@ -317,12 +306,13 @@ async function fetchChecked(url, name) {
 }
 
 export async function verifyDeploymentOrigins(config) {
+  const loopbackOrigin = (service) => `http://127.0.0.1:${config.services[service].ports[0].published}`
   const origins = {
-    frontend: `http://127.0.0.1:${config.services.frontend.ports[0].published}`,
-    provider: config.services.frontend.environment.PROVIDER_ORIGIN,
-    docs: config.services.frontend.environment.DOCS_ORIGIN,
-    mailpit: config.services.frontend.environment.MAILPIT_ORIGIN,
-    api: config.services.api.environment.API_PUBLIC_ORIGIN,
+    frontend: loopbackOrigin('frontend'),
+    provider: loopbackOrigin('provider'),
+    docs: loopbackOrigin('docs'),
+    mailpit: loopbackOrigin('mailpit'),
+    api: loopbackOrigin('api'),
   }
   const endpoints = [
     [origins.frontend, 'frontend'],

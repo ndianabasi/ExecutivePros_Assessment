@@ -7,12 +7,12 @@ services:
     init: true
     restart: unless-stopped
     environment:
-      API_ORIGIN: ${API_PUBLIC_ORIGIN:-http://127.0.0.1:18083}
-      PROVIDER_ORIGIN: ${PROVIDER_PUBLIC_ORIGIN:-http://127.0.0.1:18082}
-      DOCS_ORIGIN: ${DOCS_ORIGIN:-http://127.0.0.1:18081}
-      MAILPIT_ORIGIN: ${MAILPIT_ORIGIN:-http://127.0.0.1:18025}
+      API_ORIGIN: http://127.0.0.1:${API_PORT:?API_PORT must be set}
+      PROVIDER_ORIGIN: http://127.0.0.1:${PROVIDER_PORT:?PROVIDER_PORT must be set}
+      DOCS_ORIGIN: http://127.0.0.1:${DOCS_PORT:?DOCS_PORT must be set}
+      MAILPIT_ORIGIN: http://127.0.0.1:${MAILPIT_PORT:?MAILPIT_PORT must be set}
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-18080}:8080"
+      - "127.0.0.1:${FRONTEND_PORT:?FRONTEND_PORT must be set}:8080"
     networks:
       - assessment
     read_only: true
@@ -37,9 +37,9 @@ services:
     init: true
     restart: unless-stopped
     environment:
-      API_ORIGIN: ${API_PUBLIC_ORIGIN:-http://127.0.0.1:18083}
+      API_ORIGIN: http://127.0.0.1:${API_PORT:?API_PORT must be set}
     ports:
-      - "127.0.0.1:${DOCS_PORT:-18081}:8080"
+      - "127.0.0.1:${DOCS_PORT:?DOCS_PORT must be set}:8080"
     networks:
       - assessment
     read_only: true
@@ -127,8 +127,8 @@ services:
       NODE_ENV: production
       PORT: "3000"
       PROVIDER_DB_PATH: /data/payment_provider.db
-      PROVIDER_PUBLIC_ORIGIN: ${PROVIDER_PUBLIC_ORIGIN:-http://127.0.0.1:18082}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:18080}
+      PROVIDER_PUBLIC_ORIGIN: http://127.0.0.1:${PROVIDER_PORT:?PROVIDER_PORT must be set}
+      FRONTEND_ORIGIN: http://127.0.0.1:${FRONTEND_PORT:?FRONTEND_PORT must be set}
       API_WEBHOOK_URL: http://api:3000/v1/webhooks/payment
       PROVIDER_SERVICE_SECRET_FILE: /run/secrets/provider_service_secret
       PROVIDER_WEBHOOK_SECRET_FILE: /run/secrets/provider_webhook_secret
@@ -141,7 +141,7 @@ services:
       WEBHOOK_POLL_MS: "250"
       WEBHOOK_SWEEP_INTERVAL_MS: "1000"
     ports:
-      - "127.0.0.1:${PROVIDER_PORT:-18082}:3000"
+      - "127.0.0.1:${PROVIDER_PORT:?PROVIDER_PORT must be set}:3000"
     secrets:
       - provider_service_secret
       - provider_webhook_secret
@@ -183,11 +183,11 @@ services:
       NODE_ENV: production
       PORT: "3000"
       API_DB_PATH: /data/api.db
-      API_PUBLIC_ORIGIN: ${API_PUBLIC_ORIGIN:-http://127.0.0.1:18083}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:18080}
-      DOCS_ORIGIN: ${DOCS_ORIGIN:-http://127.0.0.1:18081}
+      API_PUBLIC_ORIGIN: http://127.0.0.1:${API_PORT:?API_PORT must be set}
+      FRONTEND_ORIGIN: http://127.0.0.1:${FRONTEND_PORT:?FRONTEND_PORT must be set}
+      DOCS_ORIGIN: http://127.0.0.1:${DOCS_PORT:?DOCS_PORT must be set}
       PROVIDER_BASE_URL: http://provider:3000
-      PROVIDER_PUBLIC_ORIGIN: ${PROVIDER_PUBLIC_ORIGIN:-http://127.0.0.1:18082}
+      PROVIDER_PUBLIC_ORIGIN: http://127.0.0.1:${PROVIDER_PORT:?PROVIDER_PORT must be set}
       QUEUE_BASE_URL: http://queue:3000
       PROVIDER_WEBHOOK_SECRET_FILE: /run/secrets/provider_webhook_secret
       PROVIDER_SERVICE_SECRET_FILE: /run/secrets/provider_service_secret
@@ -202,7 +202,7 @@ services:
       JOB_BATCH_SIZE: "100"
       SSE_HEARTBEAT_MS: "15000"
     ports:
-      - "127.0.0.1:${API_PORT:-18083}:3000"
+      - "127.0.0.1:${API_PORT:?API_PORT must be set}:3000"
     secrets:
       - provider_webhook_secret
       - provider_service_secret
@@ -259,7 +259,7 @@ services:
       MP_BLOCK_REMOTE_CSS_AND_FONTS: "true"
       MP_ENABLE_CHAOS: "false"
     ports:
-      - "127.0.0.1:${MAILPIT_PORT:-18025}:8025"
+      - "127.0.0.1:${MAILPIT_PORT:?MAILPIT_PORT must be set}:8025"
     volumes:
       - mailpit_data:/data
     networks:
