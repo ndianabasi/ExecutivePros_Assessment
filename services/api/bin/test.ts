@@ -35,14 +35,36 @@ async function close(server: Server) {
   await new Promise<void>((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()))
 }
 
-async function runProviderScript(providerDirectory: string, args: string[], env: NodeJS.ProcessEnv) {
+async function runServiceScript(serviceDirectory: string, args: string[], env: NodeJS.ProcessEnv) {
   await new Promise<void>((resolveChild, rejectChild) => {
-    const child = spawn(process.execPath, ['--import=tsx', ...args], { cwd: providerDirectory, env, stdio: ['ignore', 'ignore', 'pipe'] })
+    const child = spawn(process.execPath, ['--import=tsx', ...args], { cwd: serviceDirectory, env, stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
     child.stderr?.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000) })
     child.once('error', rejectChild)
-    child.once('exit', (code) => code === 0 ? resolveChild() : rejectChild(new Error(`Provider setup process exited with ${code}: ${stderr.slice(-1000)}`)))
+    child.once('exit', (code) => code === 0 ? resolveChild() : rejectChild(new Error(`Service setup process exited with ${code}: ${stderr.slice(-1000)}`)))
   })
+}
+
+async function runCommand(command: string, args: string[]) {
+  return new Promise<string>((resolveCommand, rejectCommand) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let output = ''
+    child.stdout?.on('data', (chunk: Buffer) => { output = `${output}${chunk.toString('utf8')}`.slice(-4000) })
+    child.stderr?.on('data', (chunk: Buffer) => { output = `${output}${chunk.toString('utf8')}`.slice(-4000) })
+    child.once('error', rejectCommand)
+    child.once('exit', (code) => code === 0 ? resolveCommand(output.trim()) : rejectCommand(new Error(`${command} ${args[0]} failed with ${code}: ${output.slice(-1000)}`)))
+  })
+}
+
+async function startMailpit(smtpPort: number, httpPort: number) {
+  const name = `api-japa-mailpit-${process.pid}`
+  await runCommand('docker', ['run', '--detach', '--rm', '--name', name,
+    '--publish', `127.0.0.1:${smtpPort}:1025`, '--publish', `127.0.0.1:${httpPort}:8025`,
+    '--env', 'MP_DATABASE=/tmp/mailpit.db', '--env', 'MP_ALLOWED_HOSTS=localhost,127.0.0.1',
+    '--env', 'MP_SMTP_BIND_ADDR=0.0.0.0:1025', '--env', 'MP_UI_BIND_ADDR=0.0.0.0:8025',
+    '--env', 'MP_DISABLE_VERSION_CHECK=true', '--env', 'MP_BLOCK_REMOTE_CSS_AND_FONTS=true',
+    '--env', 'MP_ENABLE_CHAOS=false', 'executivepros-mailpit:v1.33.1'])
+  return name
 }
 
 async function stopChild(child?: ChildProcess) {
@@ -159,7 +181,7 @@ async function setupApiTest(testCase: Test) {
 }
 
 async function setupRealProviderE2E(testCase: Test) {
-  testCase.timeout(15000)
+  testCase.timeout(45000)
   const directory = await mkdtemp(join(tmpdir(), 'api-provider-e2e-'))
   const apiDbPath = join(directory, 'api.db')
   const providerDbPath = join(directory, 'payment_provider.db')
@@ -170,10 +192,12 @@ async function setupRealProviderE2E(testCase: Test) {
     seeds: { directory: resolve('database/seeds'), extension: 'ts' },
   })
   const providerDirectory = resolve(process.cwd(), '../provider')
+  const queueDirectory = resolve(process.cwd(), '../queue')
   const providerPublicOrigin = `http://127.0.0.1:${providerTestPort}`
   const apiOrigin = `http://127.0.0.1:${apiTestPort}`
   const serviceSecret = 'b'.repeat(32)
   const webhookSecret = 'a'.repeat(32)
+  const queueSecret = 'c'.repeat(32)
   const providerEnv: NodeJS.ProcessEnv = {
     ...process.env,
     NODE_ENV: 'test',
@@ -197,27 +221,71 @@ async function setupRealProviderE2E(testCase: Test) {
     SQLITE_LOCK_BACKOFF_MS: '1',
   }
   let providerProcess: ChildProcess | undefined
+  let queueProcess: ChildProcess | undefined
   let apiServer: Server | undefined
+  let dispatcher: ReturnType<typeof createNotificationOutboxDispatcher> | undefined
+  let mailpitName: string | undefined
   let providerOutput = ''
+  let queueOutput = ''
   try {
     await db.migrate.latest()
     await db.seed.run()
     await db('users').insert({ id: 3, first_name: 'Other', last_name: 'User', email: 'other.user@example.test', role: 'user', is_active: true })
 
-    await runProviderScript(providerDirectory, ['bin/migrate.ts', 'up'], providerEnv)
-    await runProviderScript(providerDirectory, ['src/initialize.ts'], providerEnv)
+    await runServiceScript(providerDirectory, ['bin/migrate.ts', 'up'], providerEnv)
+    await runServiceScript(providerDirectory, ['src/initialize.ts'], providerEnv)
     providerProcess = spawn(process.execPath, ['--import=tsx', 'src/server.ts'], { cwd: providerDirectory, env: providerEnv, stdio: ['ignore', 'pipe', 'pipe'] })
     providerProcess.stdout?.on('data', (chunk: Buffer) => { providerOutput = `${providerOutput}${chunk.toString('utf8')}`.slice(-4000) })
     providerProcess.stderr?.on('data', (chunk: Buffer) => { providerOutput = `${providerOutput}${chunk.toString('utf8')}`.slice(-4000) })
     let providerStartError: Error | undefined
     providerProcess.once('error', (error) => { providerStartError = error })
 
+    mailpitName = await startMailpit(smtpTestPort, mailpitTestPort)
+    const mailpitOrigin = `http://127.0.0.1:${mailpitTestPort}`
+    let mailpitReady = false
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      try {
+        const response = await fetch(`${mailpitOrigin}/readyz`, { signal: AbortSignal.timeout(250) })
+        if (response.ok) { mailpitReady = true; break }
+      } catch { /* Poll until the disposable Mailpit listener is ready. */ }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 25))
+    }
+    if (!mailpitReady) throw new Error('Disposable Mailpit did not become ready for API e2e')
+
+    const queueEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      NODE_ENV: 'test', PORT: String(queueTestPort), JOBS_DB_PATH: join(directory, 'jobs.db'),
+      QUEUE_SERVICE_SECRET: queueSecret,
+      SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtpTestPort), SMTP_FROM: 'notifications@example.test',
+      EMAIL_WORKER_CONCURRENCY: '2', EMAIL_MAX_ATTEMPTS: '3', EMAIL_RETRY_INITIAL_MS: '10',
+      SMTP_TIMEOUT_MS: '1000', EMAIL_JOB_TIMEOUT_MS: '2000', EMAIL_LEASE_MS: '4000', EMAIL_POLL_MS: '10',
+    }
+    await runServiceScript(queueDirectory, ['src/initialize-db.ts'], queueEnv)
+    queueProcess = spawn(process.execPath, ['--import=tsx', 'src/server.ts'], { cwd: queueDirectory, env: queueEnv, stdio: ['ignore', 'pipe', 'pipe'] })
+    queueProcess.stdout?.on('data', (chunk: Buffer) => { queueOutput = `${queueOutput}${chunk.toString('utf8')}`.slice(-4000) })
+    queueProcess.stderr?.on('data', (chunk: Buffer) => { queueOutput = `${queueOutput}${chunk.toString('utf8')}`.slice(-4000) })
+    let queueStartError: Error | undefined
+    queueProcess.once('error', (error) => { queueStartError = error })
+    let queueReady = false
+    let lastQueueHealth = 'connection refused'
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (queueStartError) throw queueStartError
+      if (queueProcess.exitCode !== null) throw new Error(`Test-mode queue exited before readiness (${queueProcess.exitCode}): ${queueOutput.slice(-1000)}`)
+      try {
+        const response = await fetch(`http://127.0.0.1:${queueTestPort}/health/ready`, { signal: AbortSignal.timeout(250) })
+        lastQueueHealth = `HTTP ${response.status}`
+        if (response.ok) { queueReady = true; break }
+      } catch { /* Poll until the queue server has bound its configured test port. */ }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 25))
+    }
+    if (!queueReady) throw new Error(`Test-mode queue did not become ready (${lastQueueHealth}): ${queueOutput.slice(-1000)}`)
+
     const fixtureConfig = loadConfig({
       NODE_ENV: 'test', PORT: String(apiTestPort), API_DB_PATH: '/data/api.db',
       API_PUBLIC_ORIGIN: apiOrigin, FRONTEND_ORIGIN: apiOrigin, DOCS_ORIGIN: 'http://127.0.0.1:18081',
       PROVIDER_BASE_URL: providerPublicOrigin, PROVIDER_PUBLIC_ORIGIN: providerPublicOrigin,
-      QUEUE_BASE_URL: 'http://queue:3000', PROVIDER_WEBHOOK_SECRET: webhookSecret,
-      PROVIDER_SERVICE_SECRET: serviceSecret, QUEUE_SERVICE_SECRET: 'c'.repeat(32),
+      QUEUE_BASE_URL: `http://127.0.0.1:${queueTestPort}`, PROVIDER_WEBHOOK_SECRET: webhookSecret,
+      PROVIDER_SERVICE_SECRET: serviceSecret, QUEUE_SERVICE_SECRET: queueSecret,
       PROVIDER_TIMEOUT_MS: '2000', PROVIDER_INIT_BACKOFF_MS: '1', SQLITE_LOCK_BACKOFF_MS: '1',
     })
     let providerReady = false
@@ -240,20 +308,28 @@ async function setupRealProviderE2E(testCase: Test) {
       provider: new ProviderClient(fixtureConfig.providerBaseUrl, fixtureConfig.providerServiceSecret, fixtureConfig.providerTimeoutMs),
       config: fixtureConfig,
     })
+    dispatcher = createNotificationOutboxDispatcher(db, new EmailQueueClient(fixtureConfig.queueBaseUrl, queueSecret, fixtureConfig.queueTimeoutMs), fixtureConfig)
     apiServer = createServer(apiApp)
     await listen(apiServer, apiTestPort)
     const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls: { count: 0 },
-      providerLookups: { status: 404, delayMs: 0, started: false }, apiPort: apiTestPort }
+      providerLookups: { status: 404, delayMs: 0, started: false }, apiPort: apiTestPort,
+      dispatchOutbox: () => dispatcher!.dispatchDue() }
     testCase.context.apiFixture = apiFixture
     return async () => {
       await close(apiServer!)
+      await dispatcher?.close()
       await stopChild(providerProcess)
+      await stopChild(queueProcess)
+      if (mailpitName) await runCommand('docker', ['stop', mailpitName]).catch(() => '')
       await db.destroy()
       await rm(directory, { recursive: true, force: true })
     }
   } catch (error) {
     if (apiServer) await close(apiServer)
+    await dispatcher?.close()
     await stopChild(providerProcess)
+    await stopChild(queueProcess)
+    if (mailpitName) await runCommand('docker', ['stop', mailpitName]).catch(() => '')
     await db.destroy()
     await rm(directory, { recursive: true, force: true })
     throw error
@@ -263,11 +339,15 @@ async function setupRealProviderE2E(testCase: Test) {
 const apiTestPort = Number(process.env.API_TEST_PORT)
 const providerTestPort = Number(process.env.PROVIDER_TEST_PORT)
 const queueTestPort = Number(process.env.QUEUE_TEST_PORT)
+const smtpTestPort = Number(process.env.SMTP_TEST_PORT)
+const mailpitTestPort = Number(process.env.MAILPIT_TEST_PORT)
 if (!Number.isSafeInteger(apiTestPort) || apiTestPort < 40000 || apiTestPort > 65535 ||
     !Number.isSafeInteger(providerTestPort) || providerTestPort < 40000 || providerTestPort > 65535 ||
     !Number.isSafeInteger(queueTestPort) || queueTestPort < 40000 || queueTestPort > 65535 ||
-    new Set([apiTestPort, providerTestPort, queueTestPort]).size !== 3) {
-  throw new Error('API_TEST_PORT, PROVIDER_TEST_PORT, and QUEUE_TEST_PORT must be distinct ports between 40000 and 65535 in .env.test')
+    !Number.isSafeInteger(smtpTestPort) || smtpTestPort < 40000 || smtpTestPort > 65535 ||
+    !Number.isSafeInteger(mailpitTestPort) || mailpitTestPort < 40000 || mailpitTestPort > 65535 ||
+    new Set([apiTestPort, providerTestPort, queueTestPort, smtpTestPort, mailpitTestPort]).size !== 5) {
+  throw new Error('API_TEST_PORT, PROVIDER_TEST_PORT, QUEUE_TEST_PORT, SMTP_TEST_PORT, and MAILPIT_TEST_PORT must be distinct ports between 40000 and 65535 in .env.test')
 }
 const apiBaseURL = `http://127.0.0.1:${apiTestPort}`
 

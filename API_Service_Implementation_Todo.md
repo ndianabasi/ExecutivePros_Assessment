@@ -198,7 +198,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - [ ] **D3 Persistence:** verify API volume ownership and available space; take a SQLite-safe pre-migration backup when a database already exists.
 - [ ] **D3 Persistence:** run API `up` migration once before API startup; prohibit deployment-time `down`.
 - [x] **D4 Readiness:** start the API image after migrations and verify `/health/ready` confirms schema/database health.
-- [ ] **D4 Dependencies:** verify provider and queue endpoints/auth contracts are reachable for checkout and notification smoke tests.
+- [x] **D4 Dependencies:** verify provider and queue endpoints/auth contracts are reachable for checkout and notification smoke tests in the real-service Japa e2e path.
 - [ ] **D5 Functional smoke:** verify seeded login, product/cart reads, checkout, provider-confirmed completion, payment read, one fulfilment, stock decrement, outbox acceptance, SSE, and OpenAPI fetch in Compose.
 - [ ] **D6 Recovery smoke:** replay checkout key and webhook; interrupt/restore provider and queue; verify no duplicate payment/fulfilment and eventual reconciliation/outbox drain.
 - [ ] **D6 Security smoke:** reject and log an invalid webhook signature without changing payment state.
@@ -247,6 +247,7 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - 2026-11-14: Added payment reconciliation claims/leases, scheduled scans, lookup validation, normal terminal transition reuse, expiry handling, bounded retry, deduplicated admin alerting, and admin backlog diagnostics.
 - 2026-11-14: Japa integration cases pass for missed-webhook lookup, expiry with provider pending, provider outage, and webhook-vs-expiry race; webhook tests cover duplicate late success with one admin incident and no fulfilment.
 - 2026-11-14: Added public versioned OpenAPI, a structural HTTP integration check, and a contract suite for provider status/init, queue job acceptance, HMAC/Bearer separation, checkout idempotency, and payment-status route absence.
+- 2026-11-14: API e2e now launches a real queue service process with its own temporary Workmatic database and an isolated Mailpit container. It verifies API outbox acceptance reaches Mailpit through authenticated `POST /jobs`; repeated submissions with one `notification_key` return distinct job IDs and two captured messages.
 - `yarn workspace @executivepros/api test`: **passed**, 27 tests across unit, integration, contract, and real-provider e2e suites, including real-provider skipped-webhook reconciliation.
 - `yarn workspace @executivepros/api typecheck`, `lint`, `build`, `yarn install --immutable`, and `git diff --check`: **passed** after reconciliation, diagnostics, OpenAPI, and e2e changes.
 - `yarn workspace @executivepros/api test`: **passed**, 29 tests after adding SQLite down/reapply and the migration environment guard.
@@ -254,4 +255,4 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - `yarn workspace @executivepros/api typecheck`, `lint`, `build`, `yarn install --immutable`, `git diff --check`, and `docker compose config --quiet`: **passed** after API migration/image changes.
 - API image `sha256:51a850e187541ca505bc5cf6e1213725b35caadf06b4062ae83f286f2357766c` built from Node `24.1.0-alpine3.21` pinned to `sha256:dfea0736e82fef246aba86b2082a5e86c4825470302692b841d097dd61253b79`; runtime UID/GID is `10001:10001`.
 - On an isolated disposable volume, compiled production `migrate.js up` migrated and seeded successfully; the container returned `/health/ready` 200 as UID 10001. Removed only the temporary API container, project network, and project volumes.
-- Still open: real queue/SMTP acceptance and crash/lost-ack replay, complete high-concurrency/crash gates, full API image/Compose acceptance, migration preservation safety, secret scan, and downstream documentation/frontend integration. Do not mark API complete until those gates pass.
+- Still open: queue/SMTP outage and restart/lost-ack replay, API dispatcher crash recovery, complete high-concurrency/crash gates, full API Compose acceptance, migration preservation safety, secret scan, and downstream documentation/frontend integration. Do not mark API complete until those gates pass.

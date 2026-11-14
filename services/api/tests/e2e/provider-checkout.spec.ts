@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import { ProviderClient } from '../../src/provider.js'
+import { EmailQueueClient } from '../../src/queue.js'
 import { createPaymentReconciler } from '../../src/reconciliation.js'
 import { useApiFixture } from '../macros.js'
 
@@ -11,8 +12,8 @@ async function waitFor(predicate: () => Promise<boolean>) {
   throw new Error('The real provider checkout did not reach the expected API state')
 }
 
-test('real test-mode provider checkout delivers a signed webhook and fulfils once', async ({ assert, client }) => {
-  const { db, config } = await useApiFixture()
+test('real provider checkout fulfils once and its durable API email intent reaches queue and Mailpit', async ({ assert, client }) => {
+  const { db, config, dispatchOutbox } = await useApiFixture()
   const login = await client.post('/v1/login').json({ user_id: 1 })
   assert.equal(login.status(), 200)
   const token = login.body().data.token as string
@@ -59,6 +60,31 @@ test('real test-mode provider checkout delivers a signed webhook and fulfils onc
   assert.equal(await db('products').where({ id: 1 }).select('stock_quantity').first().then((row) => Number(row?.stock_quantity)), 18)
   assert.equal(await db('provider_events').where({ reference: checkout.body().data.reference, source: 'webhook', outcome: 'success' }).count({ count: '*' }).first().then((row) => Number(row?.count)), 1)
   assert.equal(await db('notification_outbox').where({ notification_type: 'payment_success' }).count({ count: '*' }).first().then((row) => Number(row?.count)), 1)
+
+  await dispatchOutbox!()
+  await waitFor(async () => {
+    const inbox = await fetch(`http://127.0.0.1:${Number(process.env.MAILPIT_TEST_PORT)}/api/v1/messages`)
+    if (!inbox.ok) return false
+    const messages = await inbox.json()
+    const serialized = JSON.stringify(messages)
+    return serialized.includes('ada.user@example.test') && serialized.includes('Payment successful')
+  })
+  assert.isTrue(await db('notification_outbox').where({ notification_type: 'payment_success' }).first().then((row) => Boolean(row.accepted_at)))
+
+  const queue = new EmailQueueClient(config.queueBaseUrl, config.queueServiceSecret, config.queueTimeoutMs)
+  const repeatedJob = { type: 'email' as const, notification_key: 'api-e2e-duplicate-correlation',
+    to: 'ada.user@example.test', subject: 'Duplicate correlation check', text: 'Repeated correlation is not deduplicated.' }
+  const [firstJobId, secondJobId] = await Promise.all([
+    queue.enqueue(repeatedJob, 'api-e2e-duplicate-request-1'),
+    queue.enqueue(repeatedJob, 'api-e2e-duplicate-request-2'),
+  ])
+  assert.notEqual(firstJobId, secondJobId)
+  await waitFor(async () => {
+    const inbox = await fetch(`http://127.0.0.1:${Number(process.env.MAILPIT_TEST_PORT)}/api/v1/messages`)
+    if (!inbox.ok) return false
+    const result = await inbox.json() as { messages?: unknown[] }
+    return (result.messages ?? []).filter((message) => JSON.stringify(message).includes('Duplicate correlation check')).length === 2
+  })
 
   const providerStatus = await fetch(`${config.providerBaseUrl}/payments/${encodeURIComponent(checkout.body().data.reference)}`, {
     headers: { Authorization: `Bearer ${config.providerServiceSecret}` },
