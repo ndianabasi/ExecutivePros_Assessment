@@ -416,7 +416,12 @@ test('deployed Swagger can create a cart, start keyed checkout, and read provide
       ?.token
   })
   expect(token).toBeTruthy()
-  await page.request.delete(`${apiOrigin}/v1/cart`, { headers: { Authorization: `Bearer ${token}` } })
+
+  const resetCart = page.locator('#swagger-ui .opblock').filter({ hasText: 'Abandon an active cart' })
+  await resetCart.locator('.opblock-summary-control').click()
+  await resetCart.getByRole('button', { name: 'Try it out' }).click()
+  await resetCart.getByRole('button', { name: 'Execute' }).click()
+  await expect(resetCart.locator('.responses-wrapper')).toContainText('204')
 
   const cart = page
     .locator('#swagger-ui .opblock')
@@ -425,6 +430,29 @@ test('deployed Swagger can create a cart, start keyed checkout, and read provide
   await cart.getByRole('button', { name: 'Try it out' }).click()
   await cart.getByRole('button', { name: 'Execute' }).click()
   await expect(cart.locator('.responses-wrapper')).toContainText('200')
+
+  const readCart = page.locator('#swagger-ui .opblock').filter({ hasText: 'Read the current active cart' })
+  await readCart.locator('.opblock-summary-control').click()
+  await readCart.getByRole('button', { name: 'Try it out' }).click()
+  await readCart.getByRole('button', { name: 'Execute' }).click()
+  await expect(readCart.locator('.responses-wrapper')).toContainText('200')
+  await expect(readCart.locator('.responses-wrapper')).toContainText('Demo notebook')
+
+  const updateItem = page
+    .locator('#swagger-ui .opblock')
+    .filter({ hasText: 'Set an active cart item quantity' })
+  await updateItem.locator('.opblock-summary-control').click()
+  await updateItem.getByRole('button', { name: 'Try it out' }).click()
+  await updateItem.getByRole('textbox', { name: 'product_id' }).fill('1')
+  await updateItem.locator('textarea').fill('{"quantity":2}')
+  await updateItem.getByRole('button', { name: 'Execute' }).click()
+  await expect(updateItem.locator('.responses-wrapper')).toContainText('200')
+  await expect(updateItem.locator('.responses-wrapper')).toContainText('"quantity": 2')
+
+  await updateItem.locator('textarea').fill('{"quantity":1}')
+  await updateItem.getByRole('button', { name: 'Execute' }).click()
+  await expect(updateItem.locator('.responses-wrapper')).toContainText('200')
+  await expect(updateItem.locator('.responses-wrapper')).toContainText('"quantity": 1')
 
   await page.getByRole('button', { name: 'Generate new key' }).click()
   const key = await page.locator('#checkout-key').inputValue()

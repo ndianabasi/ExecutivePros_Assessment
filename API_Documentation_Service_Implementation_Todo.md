@@ -97,7 +97,7 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - [x] **Picker roles/login:** active user/admin seeds appear, one selection logs in, and protected Try it out uses that selected token.
 - [x] **Token persistence:** reload restores selected user/token from local storage without re-login; invalid stored shape or protected `401` clears it.
 - [x] **Switch/expiry:** switch attempts revocation and clears old token/key even on API outage; network errors do not masquerade as expiration.
-- [ ] **Ordinary execution:** supported GET/POST/PATCH/DELETE operations execute according to the live spec, with mutations affecting only disposable test data.
+- [x] **Ordinary execution:** supported GET/POST/PATCH/DELETE operations execute according to the live spec, with mutations affecting only disposable test data.
 - [x] **Special-route controls:** login/logout/webhook/SSE remain visible but cannot execute through Swagger UI; bypassing the UI control is blocked by the request guard.
 - [x] **Picker-only identity:** manual Swagger Authorize is unavailable and cannot override the selected user.
 - [x] **Checkout helper:** random key generation/copy, persistence, uncertain same-key retry, new-key subsequent attempt, and switch-user clearing pass.
@@ -138,11 +138,12 @@ Source of truth: [API_Documentation_Service_Implementation.md](API_Documentation
 - Built `executivepros-api-docs:0.1.0` from the pinned Alpine `3.24.4` runtime with Nginx `1.30.6-r0` and Node.js `24.22.3-r0`. Disposable container was healthy and ran as UID/GID `10004:10004`.
 - Passed 5 Playwright Chromium tests against the rebuilt disposable container, including identity persistence/switching, protected request handling, blocked special routes, checkout-key flow, user-list failure/retry and responsive control layout, live API Try it out, CORS/spec failure recovery, CSP, no-store headers, narrow viewport, and keyboard focus.
 - Passed API typecheck/lint, contract suite (1 test), and integration suite (20 tests), including the live generated OpenAPI examples, no-store response, browser CORS headers, and preflight behavior. `docker compose config --quiet` and `git diff --check` passed.
-- Still open: supported PATCH/DELETE execution coverage, complete deployment acceptance, rollback rehearsal, and manual screen-reader review.
+- Still open: complete deployment acceptance, rollback rehearsal, and manual screen-reader review.
 
 ## Additional verification — 2026-11-14
 
 - `yarn workspace @executivepros/api-docs typecheck`, `lint`, `build`, `test:unit` (**7 passed**), and `test:integration` (**2 passed**) passed. Repo-wide `yarn lint` and `yarn format:check:services` passed.
 - `DOCS_TEST_URL=http://127.0.0.1:18581 API_ORIGIN_TEST=http://127.0.0.1:18583 PROVIDER_ORIGIN_TEST=http://127.0.0.1:18582 LIVE_API_ORIGIN=http://127.0.0.1:18583 yarn workspace @executivepros/api-docs test:e2e`: **passed**, 6 Playwright tests against the isolated `e2e-finalize` stack.
 - The browser gate exercises live spec loading/Try it out GET, seeded-user login, Swagger cart POST and checkout with the pasted key, real provider handoff/Pay, API-confirmed success, CSP/no-store configuration, outage recovery, and origin safety. It uses isolated browser contexts and disposable Compose data.
-- Supported PATCH/DELETE execution coverage, screen-reader review, and static-image rollback rehearsal remain unrun. Do not mark the docs deployment accepted until those named gates are completed.
+- 2026-11-14 `yarn test:all`: all root and service gates passed on isolated Compose project `e2e-63470-mwg9ug09-abdb11`. This includes API (38 Japa tests), queue (11), provider (11), API docs (7 unit, 2 integration, 6 browser), frontend (13 unit, 10 integration, 7 browser), root deployment tests (28), lint/typecheck/build gates, and the SMTP-to-Mailpit probe. The docs browser test now executes live Swagger GET, POST, PATCH, and DELETE against disposable API data, followed by keyed checkout, provider handoff, and API-confirmed success. Test containers and volumes were removed after success.
+- Still unrun: static-image rollback rehearsal and manual screen-reader review. The docs deployment remains pending those gates.
