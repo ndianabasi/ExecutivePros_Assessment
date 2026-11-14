@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-const apiOrigin = 'http://127.0.0.1:18083'
+const apiOrigin = process.env.API_ORIGIN_TEST ?? 'http://127.0.0.1:18083'
+const liveApiOrigin = process.env.LIVE_API_ORIGIN
+const providerOrigin = process.env.PROVIDER_ORIGIN_TEST ?? 'http://127.0.0.1:18082'
 const docsUrl = process.env.DOCS_TEST_URL ?? 'http://127.0.0.1:18081'
 const demoToken = 'selected-demo-token-0123456789'
 
@@ -92,7 +94,7 @@ test('real browser enforces docs identity, special-operation and checkout-key ru
       if (productsOutcome === 'unauthorized') return route.fulfill({ status: 401, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ error: { code: 'unauthorized', message: 'expired', request_id: 'test-request' } }) })
       return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: [{ id: 1, name: 'Demo notebook', price_minor: 250000, currency: 'NGN', available_stock: 20 }], meta: { page: 1, page_size: 20, total: 1 } }) })
     }
-    if (path === '/v1/cart/checkout') return route.fulfill({ status: 201, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: { id: 1, reference: 'pay_browser_fixture', status: 'pending', payment_url: 'http://127.0.0.1:18082/checkout/pay_browser_fixture' } }) })
+    if (path === '/v1/cart/checkout') return route.fulfill({ status: 201, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: { id: 1, reference: 'pay_browser_fixture', status: 'pending', payment_url: `${providerOrigin}/checkout/pay_browser_fixture` } }) })
     return route.fulfill({ status: 404, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ error: { code: 'not_found', message: 'fixture route not found', request_id: 'test-request' } }) })
   })
 
@@ -182,6 +184,22 @@ test('container HTTP headers and live configuration are verified in browser cont
   const html = await request.get('/')
   expect(html.headers()['cache-control']).toBe('no-store')
   expect(html.headers()['content-security-policy']).toContain("script-src 'self'")
+})
+
+test('deployed Swagger Try it out calls the configured live API directly', async ({ page }) => {
+  test.skip(!liveApiOrigin, 'Set LIVE_API_ORIGIN to enable the isolated Compose contract smoke')
+  await page.goto(docsUrl)
+  await expect(page.getByText('Live API specification loaded.')).toBeVisible()
+  await page.locator('#seeded-user').selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Select user' }).click()
+  await expect(page.locator('#identity')).toContainText('(user)')
+
+  const products = page.locator('#swagger-ui .opblock').filter({ hasText: '/v1/products' })
+  await products.locator('.opblock-summary-control').click()
+  await products.getByRole('button', { name: 'Try it out' }).click()
+  await products.getByRole('button', { name: 'Execute' }).click()
+  await expect(products.locator('.responses-wrapper')).toContainText('200')
+  await expect(products.locator('.responses-wrapper')).toContainText('DEMO-NOTEBOOK')
 })
 
 test('spec errors, origin mismatch and API outage keep operations disabled until a fresh valid retry', async ({ page }) => {

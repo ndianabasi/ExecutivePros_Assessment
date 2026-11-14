@@ -23,7 +23,7 @@ yarn workspace @executivepros/api-docs test:e2e
 yarn workspace @executivepros/api-docs build
 ```
 
-`test:e2e` runs isolated Chromium browser contexts against a running docs container at `DOCS_TEST_URL` (default `http://127.0.0.1:18081`) and uses controlled API fixtures. Full provider/API/queue checkout acceptance remains tracked in `API_Documentation_Service_Implementation_Todo.md` and the deployment checklist.
+`test:e2e` runs isolated Chromium browser contexts against a running docs container at `DOCS_TEST_URL` (default `http://127.0.0.1:18081`) and uses controlled API fixtures. For an alternate disposable Compose project, set `API_ORIGIN_TEST` and `PROVIDER_ORIGIN_TEST` to that project's browser origins as well. Full provider/API/queue checkout acceptance remains tracked in `API_Documentation_Service_Implementation_Todo.md` and the deployment checklist.
 
 Start, stop, and inspect the service from the repository root:
 

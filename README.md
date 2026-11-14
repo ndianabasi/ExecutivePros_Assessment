@@ -1,0 +1,163 @@
+# ExecutivePros Payment Assessment
+
+This repository contains a trusted, host-local payment assessment demo made up of six independently owned services. Start with [System_Architecture.md](System_Architecture.md); implementation contracts and their live checklists are in each service's `*_Implementation.md` and `*_Implementation_Todo.md` files.
+
+> **Trusted demo only.** Seeded user and admin selection is passwordless, Swagger can mutate demo data, and Mailpit has no login. Keep every published port on loopback. Do not expose this stack to an untrusted network or use real customer or payment data.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Browser -->|18080| Frontend[Frontend Service]
+  Browser -->|18081| Docs[API Documentation Service]
+  Browser -->|18082| Provider[Mock Payment Provider Service]
+  Browser -->|18083| API[API Service]
+  Browser -->|18025| Mailpit[Mock Email Service]
+  Frontend -->|Bearer API calls and SSE| API
+  Docs -->|live OpenAPI and Try it out| API
+  API -->|authenticated payment calls| Provider
+  Provider -->|signed webhook| API
+  API -->|durable email intents| Queue[Message Queue Service]
+  Queue -->|SMTP 1025| Mailpit
+  API --- ApiDb[(api subpath)]
+  Queue --- QueueDb[(queue subpath)]
+  Provider --- ProviderDb[(provider subpath)]
+```
+
+The regular Compose services are exactly `api`, `frontend`, `queue`, `docs`, `mailpit`, and `provider`. API owns carts, payments, stock reservations, fulfilment, reconciliation and notification intents. The provider simulates checkout and sends signed events. Queue delivers email jobs to Mailpit over private SMTP. Frontend and docs are browser applications; docs fetches the live OpenAPI document directly from API. Each database service mounts only its own directory under the project-scoped `assessment_data` volume. Mailpit has a separate project-scoped volume.
+
+## Prerequisites and clean-checkout setup
+
+- Docker Desktop with a running Engine.
+- Docker Compose `v5.2.0` or newer (required for the configured volume subpaths).
+- Node.js `24.1.0` or newer and Yarn `4.18.0` (Corepack is suitable).
+- At least 1 GiB free in the workspace filesystem; image builds and cold backups need additional room.
+
+From the repository root:
+
+```sh
+cp .env.example .env
+yarn install --immutable
+yarn deploy:local
+yarn status
+```
+
+`deploy:local` checks versions, free space, pins, origins, ports and rendered Compose config; creates three independent random service/HMAC secrets if none exist; builds the six images; prepares project volume subpaths; runs API, provider, then queue initialization in removed one-shot containers; starts the six services; waits for health; and checks browser origins, API CORS/OpenAPI, and provider framing. It does not run down migrations.
+
+Secret values live only in ignored `.local/secrets/` files with owner-only access and are mounted into their service consumers. The CLI preserves them across runs. If project data exists but a secret is missing, deployment stops and asks for the original secret to be restored. Never copy secret values into `.env`, browser config, URLs, logs, reports, or commits.
+
+## Local endpoints
+
+| Service | Browser URL | Container endpoint | Notes |
+| --- | --- | --- | --- |
+| Frontend | `http://127.0.0.1:18080` | `frontend:8080` | Storefront and payment views |
+| API docs | `http://127.0.0.1:18081` | `docs:8080` | Swagger UI; live OpenAPI comes from API |
+| Mock provider | `http://127.0.0.1:18082` | `provider:3000` | Browser checkout and internal authenticated API |
+| API | `http://127.0.0.1:18083` | `api:3000` | OpenAPI: `http://127.0.0.1:18083/v1/api_docs.json` |
+| Mailpit | `http://127.0.0.1:18025` | UI `mailpit:8025`; SMTP `mailpit:1025` | SMTP is private to Compose |
+| Queue | — | `queue:3000` | Private HTTP; no published port |
+
+Compose service names are for server-to-server traffic only. Browser configuration uses the loopback origins above. Port and origin settings are in `.env.example`; when assigning alternate ports, change both the `*_PORT` and matching public origin values. Deployment preflight rejects mismatches and non-loopback origins.
+
+## Operations
+
+```sh
+yarn deploy:local
+yarn status
+docker compose --project-name executivepros_assessment --env-file .env --file compose.yaml logs --tail=100
+yarn stop
+yarn deploy:local       # resume using the same persistent data and secrets
+yarn backup             # cold backup; services remain stopped
+```
+
+`stop` preserves containers and volumes. `backup` stops writers, archives the entire shared database volume and Mailpit volume, checks archive readability, and writes a manifest with source volume identities, image IDs, secret fingerprints and archive checksums. Secret files are not included. Restore requires the same secret files and a new disposable project name:
+
+```sh
+yarn restore path/to/verified-backup-directory \
+  --project e2e-restore --confirm-project e2e-restore
+yarn deploy:local --project e2e-restore --env-file .local/restore.env
+```
+
+Restore creates new project volumes, verifies checksums and SQLite integrity, and does not start services. Review the candidate project's origins and verify its health before directing a browser to it. The command never overwrites an existing target volume.
+
+The only volume-deleting operation is explicitly confirmed `db:down`, intended for a disposable project such as `e2e-assessment`:
+
+```sh
+yarn db:down --project e2e-assessment --confirm-project e2e-assessment
+```
+
+The project name must start with `test-`, `e2e-`, or `disposable-`, and confirmation must match exactly. Do not run it against the developer project. There are no deployment-time or production down migrations; rollback preserves database files/logs and uses a schema-compatible image or a verified restore into new volumes.
+
+## Payment walkthrough
+
+1. Open the frontend, select a seeded user (or the seeded admin in this trusted demo), and inspect the API-provided products and stock.
+2. Add products and quantities to the cart. The API calculates the total and reserves stock.
+3. Optionally select a provider failure scenario, then check out. The client sends a new `Idempotency-Key` and stores it before the request.
+4. Complete **Pay successfully**, **Fail payment**, or **Cancel payment** in the provider iframe. If framing fails, use the frontend's new-tab fallback.
+5. Return to the frontend. Its displayed payment status comes from a fresh API read; provider `postMessage` and SSE are hints. Inspect payment details, fulfilment, stock and notification status.
+6. Open Mailpit to inspect queued email and API docs to exercise the live contract. Mailpit records delivered messages; a queue acknowledgement means job acceptance, not proof of SMTP delivery.
+
+Reuse the same key after a timeout or uncertain response because the server may have accepted the request. Use a new key for a new attempt only after the API confirms failure/cancellation. Provider webhook loss is reconciled through authenticated provider status lookup. Queue retries may duplicate an email while preserving one API notification intent and one fulfilment. At day-30 expiry, a provider-reported pending payment becomes terminally failed without provider cancellation; a later provider success is recorded as a discrepancy for admin review. There is intentionally no client PUT/PATCH payment-status endpoint: only provider-authenticated webhook and reconciliation evidence updates payment state.
+
+## Test commands
+
+Each implementation checklist is authoritative; an unrun or unchecked test remains incomplete.
+
+```sh
+# API, queue and provider use Japa v5 suites provisioned from bin/test.ts.
+yarn workspace @executivepros/api lint
+yarn workspace @executivepros/api typecheck
+yarn workspace @executivepros/api test
+yarn workspace @executivepros/queue lint
+yarn workspace @executivepros/queue typecheck
+yarn workspace @executivepros/queue test
+yarn workspace @executivepros/provider lint
+yarn workspace @executivepros/provider typecheck
+yarn workspace @executivepros/provider test
+
+yarn workspace @executivepros/frontend lint
+yarn workspace @executivepros/frontend typecheck
+yarn workspace @executivepros/frontend test:unit
+yarn workspace @executivepros/frontend test:integration
+yarn workspace @executivepros/frontend build
+FRONTEND_TEST_URL=http://127.0.0.1:<isolated-frontend-port> yarn workspace @executivepros/frontend test:e2e
+
+yarn workspace @executivepros/api-docs lint
+yarn workspace @executivepros/api-docs typecheck
+yarn workspace @executivepros/api-docs test:unit
+yarn workspace @executivepros/api-docs test:integration
+yarn workspace @executivepros/api-docs build
+DOCS_TEST_URL=http://127.0.0.1:<isolated-docs-port> \
+API_ORIGIN_TEST=http://127.0.0.1:<isolated-api-port> \
+PROVIDER_ORIGIN_TEST=http://127.0.0.1:<isolated-provider-port> \
+yarn workspace @executivepros/api-docs test:e2e
+
+yarn test:deployment
+```
+
+For the root Compose smoke, make a nonsecret env file from `.env.example`, assign an unused loopback port set of your own (all at least `10000`), and update every matching public origin. Then run:
+
+```sh
+yarn deploy:local --project e2e-assessment --env-file .local/e2e-assessment.env
+FRONTEND_TEST_URL=http://127.0.0.1:<frontend-port> yarn workspace @executivepros/frontend test:e2e
+DOCS_TEST_URL=http://127.0.0.1:<docs-port> \
+API_ORIGIN_TEST=http://127.0.0.1:<api-port> \
+PROVIDER_ORIGIN_TEST=http://127.0.0.1:<provider-port> \
+LIVE_API_ORIGIN=http://127.0.0.1:<api-port> \
+yarn workspace @executivepros/api-docs test:e2e
+yarn stop --project e2e-assessment --env-file .local/e2e-assessment.env
+```
+
+The project uses separate named volumes. Remove them only after review with `yarn db:down --project e2e-assessment --confirm-project e2e-assessment`.
+
+The API e2e suite starts independent provider/queue services and a disposable Mailpit container; it needs Docker. Mailpit is validated using its pinned source-built image, HTTP readiness/API, and real SMTP messages. All browser/integration tests that mutate payments must use a unique Compose project, separate volumes and unused loopback ports. Never target the default demo data with a test suite.
+
+## Recorded verification and remaining acceptance
+
+Verified on 2026-11-14 in this checkout: root deployment policy/CLI tests (9 passed); Docker Compose `v5.2.0` rendered exactly six services with loopback bindings and subpaths; all six images built and all six isolated services passed health; API/provider/queue initialization and repeat `db:up` succeeded; API CORS, provider frame policy, live OpenAPI URL, browser runtime origins, and provider API authentication passed deployment postflight; the frontend Playwright suite passed 6/6 on an isolated restored project; the API docs browser suite passed 4/4 on deployed docs/API origins, including direct live Try it out; a successful payment produced Mailpit messages; stop preserved volumes; and cold backup, checksum verification, new-volume SQLite integrity checks, and startup from restored data passed.
+
+These results do **not** constitute complete assessment acceptance. The root test/deployment checklist records broader outage/recovery and crash-window tests, full cross-service permission checks, source/transcript review, and reviewer walkthrough as open where not yet exercised. Check [Deployment_and_Documentation_Implementation_Todo.md](Deployment_and_Documentation_Implementation_Todo.md) and each service checklist for current status and commands. A build, partial smoke, or this recorded subset is not a substitute for the remaining gates.
+
+## Assessment handoff
+
+The source repository URL and a separately reviewed full chronological AI-assistance transcript must accompany the final assessment. The transcript must include prompts **and** responses, be reviewed for secrets/personal data, and be supplied as a separate artifact named `ExecutivePros_Assessment_AI_Transcript.md`; it must not be committed here. The repository URL and transcript artifact have not been filled in by this implementation record. Keep **S1 Submission** unchecked until they are supplied and reviewed. The incremental history uses Conventional Commits; inspect `git log --oneline` for the work completed so far.

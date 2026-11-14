@@ -9,7 +9,15 @@
     "services/*"
   ],
   "scripts": {
-    "workspace:check": "yarn workspaces list --verbose"
+    "workspace:check": "yarn workspaces list --verbose",
+    "deploy:local": "node bin/assessment.mjs deploy:local",
+    "db:up": "node bin/assessment.mjs db:up",
+    "db:down": "node bin/assessment.mjs db:down",
+    "backup": "node bin/assessment.mjs backup",
+    "restore": "node bin/assessment.mjs restore",
+    "status": "node bin/assessment.mjs status",
+    "stop": "node bin/assessment.mjs stop",
+    "test:deployment": "node --test tests/deployment/*.test.mjs"
   },
   "devDependencies": {
     "commander": "15.1.0"
