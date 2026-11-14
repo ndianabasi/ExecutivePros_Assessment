@@ -58,7 +58,7 @@ export function createApp({ db, isReady, frontendOrigin, docsOrigin, provider, c
   })
 
   app.get('/v1/api_docs.json', (_request, response) => {
-    response.setHeader('Cache-Control', 'public, max-age=60')
+    response.setHeader('Cache-Control', 'no-store')
     response.json(apiOpenApiDocument(config?.apiPublicOrigin ?? 'http://127.0.0.1:3000'))
   })
 

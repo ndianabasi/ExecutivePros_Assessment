@@ -24,4 +24,12 @@ test('provider status and queue job fixtures match the API outbound contracts', 
   assert.isTrue(Boolean(openapi.body().paths['/v1/cart/checkout'].post.parameters.some((parameter: { name: string }) => parameter.name === 'Idempotency-Key')))
   assert.equal(openapi.body().paths['/v1/webhooks/payment'].post.security[0].providerWebhookHmac.length, 0)
   assert.equal(openapi.body().components.schemas.PaymentWebhook.properties.status.enum.join(','), 'success,failed,cancelled')
+  const userExample = openapi.body().paths['/v1/demo/users'].get.responses['200'].content['application/json'].examples.assessmentDemo.value
+  const users = (await client.get('/v1/demo/users')).body().data
+  for (const user of userExample.data) assert.deepEqual(users.find((actual: { id: number }) => actual.id === user.id), user)
+  const productExample = openapi.body().paths['/v1/products'].get.responses['200'].content['application/json'].examples.assessmentDemo.value
+  const productAuth = await client.post('/v1/login').json({ user_id: 1 })
+  const products = await client.get('/v1/products').header('Authorization', `Bearer ${productAuth.body().data.token}`)
+  assert.deepEqual(productExample, products.body())
+  assert.deepEqual(openapi.body().paths['/v1/cart'].post.requestBody.content['application/json'].examples.assessmentDemo.value, { items: [{ product_id: 1, quantity: 1 }] })
 })
