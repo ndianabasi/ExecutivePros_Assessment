@@ -5,6 +5,7 @@ import { currentRequestId, logger } from './logging.js'
 import {
   applyPaymentEvidence,
   recordInvalidWebhook,
+  recordMalformedWebhook,
   type TerminalPaymentStatus,
 } from './payment-transitions.js'
 import {
@@ -121,6 +122,30 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
     const actual = supplied ? Buffer.from(supplied, 'hex') : Buffer.alloc(0)
     const authenticated = actual.length === expected.length && timingSafeEqual(actual, expected)
     const bodyHash = createHash('sha256').update(rawBody).digest('hex')
+    let signedReference: string | undefined
+    try {
+      const candidate = await validate<{ reference: string }>(webhookReferenceValidator, {
+        reference: request.header('x-provider-payment-reference'),
+      })
+      const referenceSignature = await validate<{ signature: string }>(webhookSignatureValidator, {
+        signature: request.header('x-provider-reference-signature') ?? '',
+      })
+      const expectedReferenceSignature = createHmac('sha256', secret)
+        .update(`${candidate.reference}\n${bodyHash}`)
+        .digest()
+      const suppliedReferenceSignature = Buffer.from(
+        referenceSignature.signature.slice('sha256='.length),
+        'hex',
+      )
+      if (
+        suppliedReferenceSignature.length === expectedReferenceSignature.length &&
+        timingSafeEqual(suppliedReferenceSignature, expectedReferenceSignature)
+      ) {
+        signedReference = candidate.reference
+      }
+    } catch {
+      signedReference = undefined
+    }
     if (!authenticated) {
       let unverifiedReference: string | undefined
       try {
@@ -173,6 +198,49 @@ export function registerWebhookRoutes(app: Express, db: Knex, secret: string, ev
     try {
       decoded = JSON.parse(rawBody.toString('utf8'))
     } catch {
+      let target: PaymentActivityTarget | undefined
+      if (signedReference) {
+        try {
+          target = await recordMalformedWebhook(db, bodyHash, signedReference)
+        } catch (incidentError) {
+          logger.error(
+            {
+              request_id: currentRequestId(),
+              failure: busy(incidentError) ? 'database_busy' : 'incident_write_failed',
+            },
+            'malformed webhook incident could not be recorded',
+          )
+          return error(
+            response,
+            503,
+            'temporary_processing_failure',
+            'Webhook incident could not be recorded; retry later',
+          )
+        }
+      }
+      if (target) {
+        publishWebhookActivity(
+          eventHub,
+          target,
+          'webhook_received',
+          'Provider Webhook Received',
+          'A provider update was received for this payment.',
+        )
+        publishWebhookActivity(
+          eventHub,
+          target,
+          'webhook_verification_succeeded',
+          'Webhook Verified',
+          'The provider webhook signature was verified.',
+        )
+        publishWebhookActivity(
+          eventHub,
+          target,
+          'webhook_result',
+          'Malformed Webhook Rejected',
+          'The signed provider webhook contained malformed JSON. No payment data was applied.',
+        )
+      }
       return error(response, 400, 'invalid_json', 'Webhook body must contain valid JSON')
     }
     let target: PaymentActivityTarget | undefined

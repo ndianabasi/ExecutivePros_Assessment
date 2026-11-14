@@ -305,6 +305,21 @@ const paths: Record<string, Record<string, Operation | Record<string, unknown>>>
           required: true,
           schema: { type: 'string', pattern: '^sha256=' },
         },
+        {
+          in: 'header',
+          name: 'X-Provider-Payment-Reference',
+          required: false,
+          description:
+            'Payment correlation for malformed bodies, authenticated by X-Provider-Reference-Signature.',
+          schema: { type: 'string', pattern: '^pay_[A-Za-z0-9_-]{16,80}$' },
+        },
+        {
+          in: 'header',
+          name: 'X-Provider-Reference-Signature',
+          required: false,
+          description: 'HMAC-SHA256 of the payment reference, a newline, and the SHA-256 body digest.',
+          schema: { type: 'string', pattern: '^sha256=' },
+        },
       ],
       requestBody: {
         required: true,

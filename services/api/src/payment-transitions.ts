@@ -536,3 +536,43 @@ export async function recordInvalidWebhook(
       : undefined
   })
 }
+
+/**
+ * Persists a malformed-payload incident after the provider-signed correlation reference identifies its payment.
+ *
+ * @param db - Service-owned database connection used for the required persistent read or write.
+ * @param bodyHash - SHA-256 digest of the exact malformed webhook body received from the provider.
+ * @param reference - Payment reference authenticated by the provider's correlation signature.
+ *
+ * @returns The matching owner and payment identifiers, or undefined when the reference is not a local payment.
+ */
+export async function recordMalformedWebhook(
+  db: Knex,
+  bodyHash: string,
+  reference: string,
+): Promise<PaymentActivityTarget | undefined> {
+  return immediate(db, async (tx) => {
+    const payment = (
+      await tx.query<{ id: number; user_id: number; reference: string }>(
+        'SELECT id, user_id, reference FROM payments WHERE reference = :reference',
+        { reference },
+      )
+    )[0]
+    if (!payment) {
+      return undefined
+    }
+    await createIncident(tx, {
+      dedupeKey: `malformed_json:${payment.id}:${bodyHash}`,
+      paymentId: Number(payment.id),
+      reference: payment.reference,
+      code: 'malformed_webhook_json',
+      details:
+        'A provider webhook had a valid signature but contained malformed JSON; no payment data was applied',
+    })
+    return {
+      user_id: Number(payment.user_id),
+      payment_id: Number(payment.id),
+      reference: payment.reference,
+    }
+  })
+}

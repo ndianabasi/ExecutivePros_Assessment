@@ -11,6 +11,7 @@ type EventRow = {
   payment_id: number
   event_type: string
   status: string
+  canonical_body: string
   transmitted_body: string
   transmitted_hash: string
   signature_mode: string
@@ -142,6 +143,10 @@ async function sendSubmission(db: Knex, config: ProviderConfig, event: EventRow)
   try {
     const bytes = Buffer.from(event.transmitted_body, 'utf8')
     const digest = createHmac('sha256', config.webhookSecret).update(bytes).digest('hex')
+    const canonical = JSON.parse(event.canonical_body) as { reference: string }
+    const referenceSignature = createHmac('sha256', config.webhookSecret)
+      .update(`${canonical.reference}\n${hash(bytes)}`)
+      .digest('hex')
     const signature =
       event.signature_mode === 'invalid'
         ? `sha256=${digest[0] === '0' ? '1' : '0'}${digest.slice(1)}`
@@ -154,6 +159,8 @@ async function sendSubmission(db: Knex, config: ProviderConfig, event: EventRow)
         'content-type': 'application/json',
         'content-length': String(bytes.byteLength),
         'x-provider-signature': signature,
+        'x-provider-payment-reference': canonical.reference,
+        'x-provider-reference-signature': `sha256=${referenceSignature}`,
         'x-request-id': `provider-${event.event_id}`,
       },
       body: bytes,
