@@ -115,7 +115,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 - [ ] Use a unique disposable Compose project, separate volumes, and separately allocated loopback ports for root tests; never mutate the developer demo project.
 - [x] **T1 Compose/config:** verify six regular services, correct Dockerfiles/build contexts, Alpine pins, project-scoped volume subpaths, private network, loopback publications, internal-only queue/SMTP, and secret-safe rendered config.
 - [x] **T2 Artifact/permissions:** verify six non-root images, Mailpit source build, local Swagger assets, native SQLite module load, restricted writable paths, and failed cross-service DB access.
-- [ ] **T3 Prestart/migration:** verify fresh/existing volume `db:up` order and repeatability, startup blocking on failure, and production `db:down` rejection.
+- [x] **T3 Prestart/migration:** verify fresh/existing volume `db:up` order and repeatability, startup blocking on failure, and production `db:down` rejection.
 - [ ] **T4 Origin/health:** verify browser/internal routing, six own health checks, API CORS, docs live spec URL, provider iframe policy, frontend links, queue SMTP path, and appropriate dependency degradation.
 - [x] **T5 End-to-end:** verify seeded login, cart, checkout, provider completion, webhook/reconciliation, fulfilment, SSE, Mailpit email, docs Try it out, and owner/admin reads against final state.
 - [ ] **T6 Failures:** verify uncertain/duplicate checkout, provider timeout, lost/invalid webhook, queue/Mailpit outage and recovery, possible duplicate email, and API/queue/provider restart invariants.
@@ -139,7 +139,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 ## Recorded progress — 2026-11-14
 
-- Root deployment policy/CLI/secret path tests: `yarn test:deployment` (15 passed); root Yarn immutable install and Node syntax checks passed. POSIX generation/idempotency/concurrency/missing-key behavior and Windows/Linux/macOS path/ACL policies were exercised in temp directories or platform simulation.
+- Root deployment policy/CLI/secret path/migration-order tests: `yarn test:deployment` (17 passed); root Yarn immutable install and Node syntax checks passed. POSIX generation/idempotency/concurrency/missing-key behavior and Windows/Linux/macOS path/ACL policies were exercised in temp directories or platform simulation. The migration test injects a failing provider migration and proves later initialization and regular Compose startup are not invoked.
 - Compose preflight and full deploy ran on isolated projects `e2e-deployment`, `e2e-restore`, and `e2e-restore-2`, with distinct 182xx/183xx/184xx host port sets. The unrelated project holding default Mailpit port 18025 was not changed.
 - All six container images built. The final isolated project reported all six services healthy; Docker inspection confirmed non-root UIDs, read-only root filesystems, `0700` database subdirectories owned by 10001/10002/10003, and denied API/queue/provider cross-subpath reads.
 - `db:up` repeated against stopped isolated data; `stop` preserved all six containers and both persistent volumes. `db:down` refused the normal project and required explicit disposable project confirmation.

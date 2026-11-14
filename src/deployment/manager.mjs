@@ -278,11 +278,16 @@ async function createColdBackup(project, outputDirectory, envFile = '.env', { al
   return backupDirectory
 }
 
-function runMigrations(project, envFile = '.env') {
-  compose(project, ['run', '--rm', '--no-deps', 'api', 'node', 'dist/bin/migrate.js', 'up'], { envFile })
-  compose(project, ['run', '--rm', '--no-deps', 'provider', 'node', 'dist/bin/migrate.js', 'up'], { envFile })
-  compose(project, ['run', '--rm', '--no-deps', 'provider', 'node', 'dist/src/initialize.js'], { envFile })
-  compose(project, ['run', '--rm', '--no-deps', 'queue', 'node', 'dist/src/initialize-db.js'], { envFile })
+export function runMigrations(project, envFile = '.env', runCompose = compose) {
+  runCompose(project, ['run', '--rm', '--no-deps', 'api', 'node', 'dist/bin/migrate.js', 'up'], { envFile })
+  runCompose(project, ['run', '--rm', '--no-deps', 'provider', 'node', 'dist/bin/migrate.js', 'up'], { envFile })
+  runCompose(project, ['run', '--rm', '--no-deps', 'provider', 'node', 'dist/src/initialize.js'], { envFile })
+  runCompose(project, ['run', '--rm', '--no-deps', 'queue', 'node', 'dist/src/initialize-db.js'], { envFile })
+}
+
+export function startAfterMigrations(project, envFile = '.env', runCompose = compose) {
+  runMigrations(project, envFile, runCompose)
+  runCompose(project, ['up', '--detach', '--remove-orphans'], { envFile })
 }
 
 function parseComposeStatus(contents) {
@@ -364,8 +369,7 @@ export async function deployLocal({ project = defaultProject, envFile: requested
     const backup = await createColdBackup(project, outputDirectory, envFile, { alreadyStopped: true })
     console.log(`Cold backup verified: ${backup}`)
   }
-  runMigrations(project, envFile)
-  compose(project, ['up', '--detach', '--remove-orphans'], { envFile })
+  startAfterMigrations(project, envFile)
   await waitForHealthy(project, envFile)
   await verifyDeploymentOrigins(config)
   console.log(`All six services are healthy for project ${project}; persistent volumes were preserved.`)
