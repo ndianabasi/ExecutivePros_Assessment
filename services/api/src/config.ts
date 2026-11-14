@@ -14,6 +14,9 @@ export interface ApiConfig {
   providerWebhookSecret: string
   providerServiceSecret: string
   queueServiceSecret: string
+  queueTimeoutMs: number
+  outboxRetryInitialMs: number
+  outboxRetryMaxMs: number
   providerTimeoutMs: number
   providerInitAttempts: number
   providerInitBackoffMs: number
@@ -80,7 +83,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     throw new Error('API_DB_PATH must be inside the mounted /data directory')
   }
 
-  return {
+  const config: ApiConfig = {
     nodeEnv,
     port,
     dbPath,
@@ -93,6 +96,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     providerWebhookSecret: secret(env, 'PROVIDER_WEBHOOK_SECRET'),
     providerServiceSecret: secret(env, 'PROVIDER_SERVICE_SECRET'),
     queueServiceSecret: secret(env, 'QUEUE_SERVICE_SECRET'),
+    queueTimeoutMs: boundedInteger(env, 'QUEUE_TIMEOUT_MS', 5000, 100, 30000),
+    outboxRetryInitialMs: boundedInteger(env, 'OUTBOX_RETRY_INITIAL_MS', 1000, 1, 300000),
+    outboxRetryMaxMs: boundedInteger(env, 'OUTBOX_RETRY_MAX_MS', 300000, 1000, 3600000),
     providerTimeoutMs: boundedInteger(env, 'PROVIDER_TIMEOUT_MS', 5000, 100, 30000),
     providerInitAttempts: boundedInteger(env, 'PROVIDER_INIT_ATTEMPTS', 3, 1, 10),
     providerInitBackoffMs: boundedInteger(env, 'PROVIDER_INIT_BACKOFF_MS', 1000, 1, 30000),
@@ -104,4 +110,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     jobBatchSize: boundedInteger(env, 'JOB_BATCH_SIZE', 100, 1, 1000),
     paymentExpiryDays: boundedInteger(env, 'PAYMENT_EXPIRY_DAYS', 30, 1, 365),
   }
+  if (config.outboxRetryInitialMs > config.outboxRetryMaxMs) throw new Error('OUTBOX_RETRY_INITIAL_MS cannot exceed OUTBOX_RETRY_MAX_MS')
+  return config
 }

@@ -138,10 +138,10 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 
 ## 10. Notification outbox and SSE
 
-- [ ] Create user-email intents for successful, failed, and cancelled payments in the payment transaction.
+- [x] Create user-email intents for successful, failed, and cancelled payments in the payment transaction.
 - [ ] Create deduplicated admin-email intents for payment-integrity incidents, invalid-signature scenarios, unresolved day-30 lookups, and late-success discrepancies.
-- [ ] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
-- [ ] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
+- [x] Implement an API-owned outbox dispatcher that atomically claims due rows and submits authenticated `POST /jobs` requests with stable `notification_key` correlation values.
+- [x] Mark a row accepted only after the queue confirms durable acceptance; retry timeouts/outages with bounded backoff and retained rows.
 - [ ] Keep one durable API notification intent across dispatcher retries; document and test that a lost queue acknowledgement or worker replay may create a duplicate job/email without changing payment fulfilment.
 - [ ] Implement `GET /v1/events` as a Bearer-authenticated SSE stream with owner-scoped status events, heartbeat, and disconnect cleanup.
 - [ ] Publish SSE only after payment commit; keep payment outcome independent of SSE or email failure.
@@ -225,7 +225,15 @@ Source of truth: [API_Service_Implementation.md](API_Service_Implementation.md).
 - `yarn workspace @executivepros/api test`: **passed**, 16 tests across configured unit, integration, and e2e suites.
 - `yarn workspace @executivepros/api typecheck`: **passed**.
 - `yarn workspace @executivepros/api lint`: **passed**.
-- Remaining for step 5: API queue outbox dispatcher, SSE, scheduled reconciliation and day-30 expiry, OpenAPI endpoint, direct queue integration, provider failure/outage/conflict recovery cases, API Compose image and full Compose gates. Do not treat this provider success-flow test as API payment-path acceptance.
+- At that verification point, remaining for step 5 included the queue outbox dispatcher, SSE, scheduled reconciliation and day-30 expiry, OpenAPI endpoint, direct queue integration, provider failure/outage/conflict recovery cases, API Compose image and full Compose gates. Do not treat the provider success-flow test by itself as API payment-path acceptance.
+- Implemented the notification claim-token migration, authenticated bounded `POST /jobs` client, atomic batch claims, queue timeout handling, stable correlation keys, bounded jittered retry, accepted-at persistence, and startup/periodic dispatch with graceful drain. Failed requests retain the single outbox intent; an enqueue accepted by queue but not acknowledged by API can still be duplicated on retry.
+- Added an integration fixture queue listener using `QUEUE_TEST_PORT` from `.env.test` and a test that observes a queue `503`, verifies the intent remains leased/retryable, retries it, and records acceptance with the same notification key.
+- `yarn workspace @executivepros/api test:integration`: **passed**, 11 tests including the new notification outbox case.
+- `yarn workspace @executivepros/api test`: **passed**, 17 tests including the real-provider e2e test and new outbox integration test.
+- `yarn workspace @executivepros/api typecheck`, `lint`, and `build`: **passed** after the outbox changes.
+- `yarn install --immutable` and `git diff --check`: **passed** after the outbox changes.
+- API readiness verification now requires both API migrations and accepts `.ts` names from tests and `.js` names from compiled deployment.
+- Remaining for step 5: exercise real queue/SMTP acceptance, dispatcher restart/uncertain-ack duplication, SSE, scheduled reconciliation/day-30 expiry, OpenAPI, provider failure/outage/conflict cases, and full Compose gates. The API outbox only accepts durable queue jobs; it does not claim SMTP delivery.
 
 ## Current verification record
 

@@ -6,6 +6,9 @@ export interface ApiTestFixture {
   db: Knex
   config: ApiConfig
   providerInitCalls: { count: number }
+  apiPort: number
+  queue?: { requests: Array<{ authorization: string; requestId: string; body: Record<string, unknown> }>; responseStatus: number }
+  dispatchOutbox?: () => Promise<void>
 }
 
 declare module '@japa/runner/core' {

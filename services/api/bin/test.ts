@@ -15,6 +15,8 @@ import configFile from '../knexfile.js'
 import { loadConfig } from '../src/config.js'
 import { createApp } from '../src/app.js'
 import { ProviderClient } from '../src/provider.js'
+import { EmailQueueClient } from '../src/queue.js'
+import { createNotificationOutboxDispatcher } from '../src/notification-outbox.js'
 import type { ApiTestFixture } from '../tests/macros.js'
 import '../tests/macros.js'
 
@@ -67,7 +69,9 @@ async function setupApiTest(testCase: Test) {
     seeds: { directory: resolve('database/seeds'), extension: 'ts' },
   })
   let providerServer: Server | undefined
+  let queueServer: Server | undefined
   let apiServer: Server | undefined
+  const queue = { requests: [] as Array<{ authorization: string; requestId: string; body: Record<string, unknown> }>, responseStatus: 202 }
   try {
     await db.migrate.latest()
     await db.seed.run()
@@ -99,14 +103,26 @@ async function setupApiTest(testCase: Test) {
     providerServer = createServer(providerApp).listen(providerTestPort, '127.0.0.1')
     const providerUrl = await listen(providerServer, providerTestPort)
 
+    const queueApp = express()
+    queueApp.use(express.json({ limit: '64kb' }))
+    queueApp.post('/jobs', (request, response) => {
+      queue.requests.push({ authorization: request.header('authorization') ?? '', requestId: request.header('x-request-id') ?? '', body: request.body as Record<string, unknown> })
+      if (queue.responseStatus === 202) return response.status(202).json({ job_id: `job-${queue.requests.length}`, status: 'queued', request_id: request.header('x-request-id') })
+      return response.status(queue.responseStatus).json({ error: { code: 'QUEUE_UNAVAILABLE' } })
+    })
+    queueServer = createServer(queueApp)
+    const queueUrl = await listen(queueServer, queueTestPort)
+
     const fixtureConfig = loadConfig({
       NODE_ENV: 'test', PORT: '3000', API_DB_PATH: '/data/api.db',
       API_PUBLIC_ORIGIN: 'http://127.0.0.1:18083', FRONTEND_ORIGIN: 'http://127.0.0.1:18080', DOCS_ORIGIN: 'http://127.0.0.1:18081',
       PROVIDER_BASE_URL: providerUrl, PROVIDER_PUBLIC_ORIGIN: 'http://127.0.0.1:18082',
-      QUEUE_BASE_URL: 'http://queue:3000', PROVIDER_WEBHOOK_SECRET: 'a'.repeat(32),
+      QUEUE_BASE_URL: queueUrl, PROVIDER_WEBHOOK_SECRET: 'a'.repeat(32),
       PROVIDER_SERVICE_SECRET: 'b'.repeat(32), QUEUE_SERVICE_SECRET: 'c'.repeat(32),
       PROVIDER_TIMEOUT_MS: '1000', PROVIDER_INIT_BACKOFF_MS: '1', SQLITE_LOCK_BACKOFF_MS: '1',
+      QUEUE_TIMEOUT_MS: '250', OUTBOX_RETRY_INITIAL_MS: '10', OUTBOX_RETRY_MAX_MS: '1000',
     })
+    const dispatcher = createNotificationOutboxDispatcher(db, new EmailQueueClient(queueUrl, fixtureConfig.queueServiceSecret, fixtureConfig.queueTimeoutMs), fixtureConfig)
     const apiApp = createApp({
       db, isReady: () => true,
       frontendOrigin: fixtureConfig.frontendOrigin, docsOrigin: fixtureConfig.docsOrigin,
@@ -115,16 +131,20 @@ async function setupApiTest(testCase: Test) {
     })
     apiServer = createServer(apiApp).listen(apiTestPort, '127.0.0.1')
     await listen(apiServer, apiTestPort)
-    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls }
+    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls, apiPort: apiTestPort, queue,
+      dispatchOutbox: () => dispatcher.dispatchDue() }
     testCase.context.apiFixture = apiFixture
     return async () => {
       await close(apiServer!)
+      await dispatcher.close()
+      await close(queueServer!)
       await close(providerServer!)
       await db.destroy()
       await rm(directory, { recursive: true, force: true })
     }
   } catch (error) {
     if (apiServer) await close(apiServer)
+    if (queueServer) await close(queueServer)
     if (providerServer) await close(providerServer)
     await db.destroy()
     await rm(directory, { recursive: true, force: true })
@@ -216,7 +236,7 @@ async function setupRealProviderE2E(testCase: Test) {
     })
     apiServer = createServer(apiApp)
     await listen(apiServer, apiTestPort)
-    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls: { count: 0 } }
+    const apiFixture: ApiTestFixture = { db, config: fixtureConfig, providerInitCalls: { count: 0 }, apiPort: apiTestPort }
     testCase.context.apiFixture = apiFixture
     return async () => {
       await close(apiServer!)
@@ -235,9 +255,12 @@ async function setupRealProviderE2E(testCase: Test) {
 
 const apiTestPort = Number(process.env.API_TEST_PORT)
 const providerTestPort = Number(process.env.PROVIDER_TEST_PORT)
+const queueTestPort = Number(process.env.QUEUE_TEST_PORT)
 if (!Number.isSafeInteger(apiTestPort) || apiTestPort < 40000 || apiTestPort > 65535 ||
-    !Number.isSafeInteger(providerTestPort) || providerTestPort < 40000 || providerTestPort > 65535 || apiTestPort === providerTestPort) {
-  throw new Error('API_TEST_PORT and PROVIDER_TEST_PORT must be set to distinct ports between 40000 and 65535 in .env.test')
+    !Number.isSafeInteger(providerTestPort) || providerTestPort < 40000 || providerTestPort > 65535 ||
+    !Number.isSafeInteger(queueTestPort) || queueTestPort < 40000 || queueTestPort > 65535 ||
+    new Set([apiTestPort, providerTestPort, queueTestPort]).size !== 3) {
+  throw new Error('API_TEST_PORT, PROVIDER_TEST_PORT, and QUEUE_TEST_PORT must be distinct ports between 40000 and 65535 in .env.test')
 }
 const apiBaseURL = `http://127.0.0.1:${apiTestPort}`
 
