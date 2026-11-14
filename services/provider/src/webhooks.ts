@@ -1,4 +1,6 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto'
+import { stat, statfs } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { Knex } from 'knex'
 import { createClient, createWorker, type WorkmaticDb } from 'workmatic'
 import type { ProviderConfig } from './config.js'
@@ -411,6 +413,58 @@ export function createWebhookRuntime(db: Knex, workmaticDb: WorkmaticDb, config:
   }
 
   /**
+   * Collects bounded operational counts and SQLite capacity without returning event bodies or capabilities.
+   *
+   * @returns The provider delivery backlog, retry history, Workmatic dead count, and database capacity.
+   */
+  async function diagnostics() {
+    const now = new Date().toISOString()
+    const [
+      pendingPayments,
+      dueEvents,
+      failedEvents,
+      skippedEvents,
+      oldestUndelivered,
+      deliveryAttempts,
+      jobStats,
+    ] = await Promise.all([
+      db.raw("SELECT COUNT(*) AS count FROM payments WHERE status = 'pending'"),
+      db.raw("SELECT COUNT(*) AS count FROM webhook_events WHERE status = 'pending' AND due_at <= :now", {
+        now,
+      }),
+      db.raw("SELECT COUNT(*) AS count FROM webhook_events WHERE status = 'failed'"),
+      db.raw("SELECT COUNT(*) AS count FROM webhook_events WHERE status = 'skipped'"),
+      db.raw(
+        "SELECT MIN(created_at) AS oldest FROM webhook_events WHERE status IN ('pending', 'delivering', 'failed')",
+      ),
+      db.raw('SELECT COUNT(*) AS count FROM webhook_deliveries'),
+      client.stats(),
+    ])
+    const [databaseFile, fileSystem] = await Promise.all([
+      stat(config.dbPath),
+      statfs(dirname(config.dbPath)),
+    ])
+    const count = (rows: Array<{ count: number | string }>) => {
+      return Number(rows[0]?.count ?? 0)
+    }
+    const fileSystemBlockSize = Number(fileSystem.bsize)
+    return {
+      pending_provider_payments: count(pendingPayments),
+      due_webhook_events: count(dueEvents),
+      failed_webhook_events: count(failedEvents),
+      skipped_webhook_events: count(skippedEvents),
+      dead_workmatic_jobs: Number(jobStats.dead ?? 0),
+      oldest_undelivered_event_at: (oldestUndelivered as Array<{ oldest: string | null }>)[0]?.oldest ?? null,
+      webhook_attempts: count(deliveryAttempts),
+      sqlite: {
+        database_bytes: databaseFile.size,
+        filesystem_total_bytes: fileSystemBlockSize * Number(fileSystem.blocks),
+        filesystem_available_bytes: fileSystemBlockSize * Number(fileSystem.bavail),
+      },
+    }
+  }
+
+  /**
    * Coordinates schedule due events while enforcing persistence, retry, and state-transition rules.
    */
   async function scheduleDueEvents() {
@@ -471,5 +525,5 @@ export function createWebhookRuntime(db: Knex, workmaticDb: WorkmaticDb, config:
       sweeping = false
     }
   }
-  return { client, worker, scheduleDueEvents, start }
+  return { client, worker, scheduleDueEvents, start, diagnostics }
 }

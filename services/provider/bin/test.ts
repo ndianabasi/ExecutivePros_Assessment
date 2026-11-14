@@ -150,6 +150,7 @@ async function setupProviderTest(testCase: Test) {
       },
       worker: runtime.worker,
       scheduleDueEvents: runtime.scheduleDueEvents,
+      diagnostics: runtime.diagnostics,
     })
     providerServer = createServer(app)
     await listen(providerServer, providerPort)

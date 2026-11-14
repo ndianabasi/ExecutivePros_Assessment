@@ -104,6 +104,26 @@ test('service auth, scenarios, initialization replay, conflict, and status looku
     .get('/payments/pay_missing_123456')
     .header('Authorization', auth(fixture.config.serviceSecret))
   assert.equal(missing.status(), 404)
+
+  const diagnosticsDenied = await client.get('/diagnostics')
+  assert.equal(diagnosticsDenied.status(), 401)
+  const diagnostics = await client
+    .get('/diagnostics')
+    .header('Authorization', auth(fixture.config.serviceSecret))
+  assert.equal(diagnostics.status(), 200)
+  assert.equal(diagnostics.body().data.pending_provider_payments, 1)
+  assert.equal(diagnostics.body().data.due_webhook_events, 0)
+  assert.equal(diagnostics.body().data.failed_webhook_events, 0)
+  assert.equal(diagnostics.body().data.skipped_webhook_events, 0)
+  assert.equal(diagnostics.body().data.dead_workmatic_jobs, 0)
+  assert.equal(diagnostics.body().data.oldest_undelivered_event_at, null)
+  assert.equal(diagnostics.body().data.webhook_attempts, 0)
+  assert.isAbove(diagnostics.body().data.sqlite.database_bytes, 0)
+  assert.isAbove(diagnostics.body().data.sqlite.filesystem_available_bytes, 0)
+  const diagnosticJson = JSON.stringify(diagnostics.body())
+  assert.isFalse(diagnosticJson.includes(fixture.config.serviceSecret))
+  assert.isFalse(diagnosticJson.includes(fixture.config.webhookSecret))
+  assert.isFalse(diagnosticJson.includes('checkout_token'))
 })
 
 test('initialization delay is absent to lookup until one immutable payment is committed', async ({

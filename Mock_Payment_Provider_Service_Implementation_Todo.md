@@ -25,7 +25,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Pass Workmatic an existing configured `better-sqlite3` connection to the **same `payment_provider.db` file**; leave its internal tables library-owned and unqueried by Knex.
 - [x] Enable and verify foreign keys on every connection, WAL on the local volume, finite busy timeout, and expected provider/Workmatic schema at startup.
 - [x] Retry a whole safe transaction within a bound on `SQLITE_BUSY`; never retry only an arbitrary partial statement sequence or hold a write transaction across HTTP/timers.
-- [ ] Add provider `migrate:up` and local/test-only `migrate:down`; connect provider `up` migrations and Workmatic initialization to the root Commander prestart flow.
+- [x] Add provider `migrate:up` and local/test-only `migrate:down`; connect provider `up` migrations and Workmatic initialization to the root Commander prestart flow.
 - [x] Disallow production `down` migrations.
 - [x] Seed the exact active architecture scenarios idempotently without overwriting runtime payments or their scenario snapshots.
 - [x] Retain completed, failed, and skipped events, delivery attempts, and Workmatic done/dead jobs until an explicit disposable-volume reset.
@@ -66,7 +66,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 ## 5. Browser checkout and payment transition
 
 - [x] Implement token-protected `GET /checkout/:token` using token-hash lookup; show trusted amount, currency, reference, and selected scenario.
-- [ ] Render labelled Pay, Fail, and Cancel actions with keyboard/focus/readable status behavior; collect no card number or real payment data.
+- [x] Render labelled Pay, Fail, and Cancel actions with keyboard/focus/readable status behavior; collect no card number or real payment data.
 - [x] Restrict `WEBHOOK_008` checkout to Pay and explain its conflicting-event demonstration on the page.
 - [x] Make the page work in the frontend iframe and as a standalone new tab without relying on top-level navigation or automatic popups.
 - [x] Implement browser `POST /payments/submit` with only bounded `checkout_token` and `outcome` (`success`, `failed`, `cancelled`) fields; require no API user token.
@@ -90,7 +90,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Treat `webhook_events` as a durable outbox and scan/claim due events in bounded batches after outcome commit and on restart.
 - [x] Enqueue claimed events to Workmatic `webhooks` in the same provider DB, then persist job correlation; recover expired claims.
 - [x] Accept that a crash after enqueue but before correlation can create a duplicate job, and keep event-ID idempotency intact.
-- [ ] Set five Workmatic delivery rounds with 2/4/8/16-second retry delays; configure HTTP timeout < job timeout < lease.
+- [x] Set five Workmatic delivery rounds with 2/4/8/16-second retry delays; configure HTTP timeout < job timeout < lease.
 - [x] Treat network errors, timeouts, HTTP `5xx`, `408`, and `429` as retryable when no submission in the round got `2xx`.
 - [x] Treat API `2xx` as acknowledgment; finish deliberate duplicate copies in that round and mark delivered only after planned copies finish with at least one `2xx`.
 - [x] Treat permanent API `4xx` as non-retryable when no copy was acknowledged; mark event `failed` and resolve the Workmatic handler.
@@ -121,15 +121,15 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Log request completion with method, route template, auth state/type, HTTP status, duration, and request/response sizes.
 - [x] Correlate payment/provider references, scenario code, event/job IDs, attempt number, and redacted failure class in lifecycle logs.
 - [x] Redact service/webhook secrets, checkout tokens/URLs, signature/body bytes, personal data, and unbounded API responses.
-- [ ] Provide trusted-network diagnostic counts for pending provider payments, due/failed/skipped events, Workmatic dead jobs, oldest undelivered event, webhook attempts, and SQLite capacity.
-- [ ] Keep diagnostic output free of payment capability tokens and secrets.
-- [ ] Document that API `2xx` acknowledges a webhook, provider success can coexist with webhook failure, and the API may later reconcile missed or rejected webhooks.
+- [x] Provide trusted-network diagnostic counts for pending provider payments, due/failed/skipped events, Workmatic dead jobs, oldest undelivered event, webhook attempts, and SQLite capacity.
+- [x] Keep diagnostic output free of payment capability tokens and secrets.
+- [x] Document that API `2xx` acknowledges a webhook, provider success can coexist with webhook failure, and the API may later reconcile missed or rejected webhooks.
 
 ## 9. Automated test gates — check only after passing
 
 - [x] Pin an exact `@japa/runner` 5.x release and compatible `@japa/assert` and `@japa/api-client` versions in the Yarn lockfile; use no legacy `japa` runner.
 - [x] Create an ESM `bin/test.ts` using Japa `processCLIArgs`, `configure`, and `run`, with an ESM-compatible TypeScript executor for the pinned Node version.
-- [ ] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
+- [x] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
 - [x] Use Japa assertions and lifecycle hooks for disposable file-backed SQLite, scenario seeds, ephemeral HTTP listener, Japa API-client calls, and cleanup.
 - [ ] Run migrations/Knex-Workmatic concurrency/worker recovery in Japa `integration`, HMAC/API handoff fixtures in `contract`, and real Compose/browser/test-proxy/child-process crash cases in `e2e`.
 - [ ] **Static/build:** lint, strict typecheck, production build, lockfile integrity, no committed secrets, Alpine container build, and runtime SQLite module load pass.
@@ -169,7 +169,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] **D5 Functional smoke:** initialize, replay reference, complete Pay/Fail/Cancel on separate attempts, inspect status and signed webhook, and verify frontend API-state refresh after hint.
 - [ ] **D6 Recovery/scenario smoke:** exercise pre-persistence delay, test-proxy lost response, duplicate/conflicting/bad/missing/delayed webhook, API outage/recovery, event/job restart recovery, and browser expiry.
 - [x] **D6 Integrity:** verify one provider payment per reference and no API double fulfilment or terminal-state overwrite in recovery tests.
-- [ ] **D7 README:** explain local start/stop, migrations/seeds, origins/secrets, checkout/scenario walkthrough, test commands, request/event/job tracing, failed-event inspection, retention/capacity, SQLite backup/restore, and disposable-volume reset.
+- [x] **D7 README:** explain local start/stop, migrations/seeds, origins/secrets, checkout/scenario walkthrough, test commands, request/event/job tracing, failed-event inspection, retention/capacity, SQLite backup/restore, and disposable-volume reset.
 - [x] Record every deployment gate result and every unrun check before acceptance.
 - [ ] On failed rollout, preserve provider DB/logs; use prior image only if schema-compatible or restore a verified pre-upgrade backup into an isolated volume.
 - [ ] Never delete the persistent provider volume as rollback; keep the service simulated with no card-data collection or real settlement.
@@ -204,6 +204,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 ## Additional verification — 2026-11-14
 
 - `yarn workspace @executivepros/provider test`: **passed**, 10 Japa tests. `typecheck`, `lint`, and `build` passed; repo-wide lint and service formatting checks passed.
+- Added service-authenticated `GET /diagnostics` for bounded provider backlog, Workmatic dead-job count, delivery attempts, oldest undelivered event, and SQLite/file-system capacity. The provider Japa contract asserts authorization, expected counts, and absence of service/webhook secrets and checkout capability fields; the 10-test suite, typecheck, lint, and build pass.
 - Aligned production and Japa startup: the initial due-event sweep runs before webhook handler registration/worker start, and the provider listener starts afterward. The retry test now waits for persisted event state after HTTP receipt; `yarn workspace @executivepros/provider test` passes 10/10 after this change.
 - A fresh six-service deployment in isolated project `e2e-finalize` reached healthy status on separate loopback ports. Frontend Playwright used the real provider iframe and exercised success, failure, cancellation, invalid-signature, and scenario flows; API logs showed persisted terminal transitions and webhook acknowledgement.
 - This does not replace the provider-owned exhaustive delivery/scenario/restart matrix, test-proxy crash windows, provider-volume backup/restore, or deployment rollback checks. Those remain open.

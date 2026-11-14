@@ -20,8 +20,9 @@ export function createApp(dependencies: {
   isReady: () => boolean | Promise<boolean>
   worker: WorkmaticWorker
   scheduleDueEvents: () => Promise<void>
+  diagnostics: () => Promise<Record<string, unknown>>
 }): Express {
-  const { db, config, isReady, worker, scheduleDueEvents } = dependencies
+  const { db, config, isReady, worker, scheduleDueEvents, diagnostics } = dependencies
   const app = express()
   app.disable('x-powered-by')
   app.use(requestLogging)
@@ -47,6 +48,10 @@ export function createApp(dependencies: {
   })
 
   const service = requireService(config)
+  app.get('/diagnostics', service, async (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store')
+    return response.json({ data: await diagnostics() })
+  })
   registerPaymentRoutes(app, db, config, { schedule: scheduleDueEvents, serviceAuth: service })
 
   app.use((_request, response) => {

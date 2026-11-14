@@ -43,6 +43,7 @@ const app = createApp({
   },
   worker: runtime.worker,
   scheduleDueEvents: runtime.scheduleDueEvents,
+  diagnostics: runtime.diagnostics,
 })
 const server = createServer(app)
 server.listen(config.port, '0.0.0.0', () => {
