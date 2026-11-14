@@ -1,5 +1,10 @@
 import './src/load-env.js'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Knex } from 'knex'
+
+const serviceDirectory = dirname(fileURLToPath(import.meta.url))
+const migrationExtension = import.meta.url.endsWith('.ts') ? 'ts' : 'js'
 
 const config: Knex.Config = {
   client: 'better-sqlite3',
@@ -17,8 +22,8 @@ const config: Knex.Config = {
       }
     },
   },
-  migrations: { directory: './database/migrations', extension: 'ts' },
-  seeds: { directory: './database/seeds', extension: 'ts' },
+  migrations: { directory: resolve(serviceDirectory, 'database/migrations'), extension: migrationExtension },
+  seeds: { directory: resolve(serviceDirectory, 'database/seeds'), extension: migrationExtension },
 }
 
 export default config

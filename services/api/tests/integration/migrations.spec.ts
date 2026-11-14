@@ -18,6 +18,17 @@ test('migrates a file database and seeds demo records idempotently', async ({ as
   assert.isTrue(await verifyDatabase(db))
 })
 
+test('disposable file database can roll back and reapply the complete migration batch', async ({ assert }) => {
+  const { db } = await useApiFixture()
+  const rollback = await db.migrate.rollback()
+  assert.equal(rollback[0], 1)
+  const applied = await db.migrate.latest()
+  await db.seed.run()
+  assert.isTrue(applied[1].length > 0)
+  assert.equal(await db('users').count({ count: '*' }).then((rows) => Number(rows[0]?.count)), 2)
+  assert.isTrue(await verifyDatabase(db))
+})
+
 test('SQLite schema enforces cart quantity, unique payment reference, and one pending payment per cart', async ({ assert }) => {
   const { db } = await useApiFixture()
   const cartId = Number((await db('carts').insert({ user_id: 1, status: 'checked_out', currency: 'NGN', total_minor: 250000 }))[0])

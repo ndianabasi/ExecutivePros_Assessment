@@ -16,8 +16,8 @@
     "test:contract": "node --import=tsx bin/test.ts contract",
     "test:e2e": "node --import=tsx bin/test.ts e2e",
     "start": "node dist/src/server.js",
-    "migrate:up": "knex --knexfile knexfile.ts migrate:latest",
-    "migrate:down": "knex --knexfile knexfile.ts migrate:rollback"
+    "migrate:up": "node --import=tsx bin/migrate.ts up",
+    "migrate:down": "node --import=tsx bin/migrate.ts down"
   },
   "dependencies": {
     "@vinejs/vine": "4.4.0",
