@@ -68,6 +68,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 
 - [x] Validate Docker/Compose and Yarn/Node prerequisites, selected Compose project, host port availability and uniqueness, disk space, image pins/digests, secrets, and port-derived origins before deployment.
 - [x] Render and validate `docker compose config` without printing secret values.
+- [x] Log each `deploy:local` operation with `starting:`, `success:`, and `failed:` outcomes, stop on failure, and print the configured Frontend Service URL after every health and browser-origin gate passes.
 - [x] Build all six images before running migrations or exposing the new stack.
 - [x] Create/verify the shared volume subpaths and Mailpit volume before starting service-owned migration jobs.
 - [x] On upgrade with existing data, stop all six regular containers before copying shared SQLite data; keep writers stopped through the cold backup.
@@ -140,6 +141,7 @@ Source of truth: [Deployment_and_Documentation_Implementation.md](Deployment_and
 ## Recorded progress — 2026-11-14
 
 - Root deployment policy/CLI/secret path/migration-order tests: `yarn test:deployment` (17 passed); root Yarn immutable install and Node syntax checks passed. POSIX generation/idempotency/concurrency/missing-key behavior and Windows/Linux/macOS path/ACL policies were exercised in temp directories or platform simulation. The migration test injects a failing provider migration and proves later initialization and regular Compose startup are not invoked.
+- 2026-11-14: `deploy:local` now emits `starting:`, `success:`, or `failed:` for preflight checks, each host port check, image build, persistent-volume setup, migrations, startup, health polling, and each browser-origin check; failures stop later operations. Final output includes the loopback Frontend Service URL only after verification. Unit coverage checks success/failure formatting and migration-step order; `yarn test:deployment` passes 20/20.
 - Compose preflight and full deploy ran on isolated projects `e2e-deployment`, `e2e-restore`, and `e2e-restore-2`, with distinct 182xx/183xx/184xx host port sets. The unrelated project holding default Mailpit port 18025 was not changed.
 - All six container images built. The final isolated project reported all six services healthy; Docker inspection confirmed non-root UIDs, read-only root filesystems, `0700` database subdirectories owned by 10001/10002/10003, and denied API/queue/provider cross-subpath reads.
 - `db:up` repeated against stopped isolated data; `stop` preserved all six containers and both persistent volumes. `db:down` refused the normal project and required explicit disposable project confirmation.

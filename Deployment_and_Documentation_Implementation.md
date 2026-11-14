@@ -58,6 +58,8 @@ Check API CORS for the frontend and docs origins and `Authorization`, `Content-T
 
 The root Commander `deploy:local` operation follows these stages and exits non-zero at the first failed gate:
 
+Print `starting:`, `success:`, or `failed:` for each preflight, build, volume, migration, startup, health, and browser-origin verification step. A failed operation must emit its `failed:` line and stop subsequent deployment steps. After all six services and browser-facing checks pass, print the loopback Frontend Service URL derived from `FRONTEND_PORT` so a nontechnical user can open the demo directly.
+
 1. **Preflight:** verify Docker/Compose and Yarn/Node prerequisites, selected Compose project, host-port availability, disk space, exact image pins/digests, ignored secret files, required origins, and rendered `docker compose config`. Do not echo secrets. Require an explicit disposable project name for reset/down operations.
 2. **Build and storage setup:** build the six service images, verify non-root runtime and native SQLite module load, create the shared named volume and protected subdirectories, and confirm each service sees only its own `/data` subpath. Prepare the separate Mailpit volume.
 3. **Cold backup on upgrade:** if persistent data already exists, stop the six regular containers so all three SQLite writers and Mailpit are quiescent. Back up the whole shared volume including DB, `-wal`, and `-shm` files; back up the separate Mailpit volume when inbox history is to be preserved. Record project name, source volume IDs, image digests, timestamp, and checksums in a manifest stored outside the volumes. Verify archive readability before migration.

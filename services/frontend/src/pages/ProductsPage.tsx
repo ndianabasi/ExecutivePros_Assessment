@@ -256,12 +256,12 @@ export function ProductsPage() {
       <CardHeading>Payment scenario</CardHeading>
       <p className="mb-3 text-sm text-slate-600">Provider cases are optional. Client demos below can be used instead of a provider scenario.</p>
       <label className="grid max-w-2xl gap-2 font-medium" htmlFor="scenario">Provider scenario
-        <select id="scenario" disabled={Boolean(intent)} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:bg-slate-100" value={scenario} onChange={(event) => setScenario(event.target.value)}>
+        <select id="scenario" disabled={busy} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:bg-slate-100" value={scenario} onChange={(event) => setScenario(event.target.value)}>
           <option value="">Standard checkout</option>
           {scenarios.map((entry) => <option key={entry.code} value={entry.code}>{entry.name} ({entry.code})</option>)}
         </select>
       </label>
-      {intent && <p className="mt-2 text-sm text-amber-900">A checkout outcome is pending or uncertain. Keep this scenario and reuse its saved key until the API confirms a terminal status.</p>}
+      {intent && <p className="mt-2 text-sm text-amber-900">A checkout outcome is pending or uncertain. You can choose a scenario for a future checkout; use the saved key to retry this attempt. {intent.payment_id && <Link className="font-semibold underline" to="/payments">View payment status</Link>}</p>}
       {scenarioError && <p className="mt-2 text-sm text-amber-900">Scenario catalogue unavailable: {scenarioError} Standard checkout remains available.</p>}
     </Card>
 
@@ -286,7 +286,7 @@ export function ProductsPage() {
         </li>)}</ul>
         <p className="mt-3 text-right text-xl font-bold">Total from API: {money(cart.total_minor, cart.currency)}</p>
         {latestPayment && <p className="mt-2 text-sm">Latest attempt: <Link className="underline" to={`/payments/${latestPayment.id}`}>{latestPayment.reference} — {latestPayment.status}</Link></p>}
-        {latestPayment?.status === 'pending' && <p className="mt-2 text-sm text-amber-900">A payment is pending. Reuse the saved key after an uncertain checkout response.</p>}
+        {latestPayment?.status === 'pending' && <p className="mt-2 text-sm text-amber-900">A payment is pending. Reuse the saved key after an uncertain checkout response. <Link className="font-semibold underline" to="/payments">View payment status</Link></p>}
         <div className="mt-4 flex flex-wrap gap-2">
           <Button disabled={busy || cart.status !== 'active'} onClick={() => void submitCheckout()}>Checkout</Button>
           <Button variant="outline" disabled={busy || !cart.items.length || Boolean(scenario)} onClick={() => void timeoutDemo()}>Demo client timeout</Button>

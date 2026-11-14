@@ -33,6 +33,20 @@ const imageNames = {
   provider: 'executivepros-provider:0.1.0',
 }
 const serviceOwners = { api: 10001, queue: 10002, provider: 10003 }
+const directStep = (_label, action) => action()
+
+export async function runLoggedStep(label, action, logger = console) {
+  logger.log(`starting: ${label}`)
+  try {
+    const result = await action()
+    logger.log(`success: ${label}`)
+    return result
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    logger.error(`failed: ${label}: ${detail}`)
+    throw error
+  }
+}
 
 function run(command, args, { cwd = repoRoot, allowFailure = false, env = process.env } = {}) {
   const result = spawnSync(command, args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
@@ -143,9 +157,9 @@ function renderedConfig(project, envFile) {
   return config
 }
 
-async function checkHostPorts(project, config) {
+async function checkHostPorts(project, config, step = directStep) {
   const ports = [...new Set(Object.values(config.services).flatMap((service) => (service.ports ?? []).map((port) => Number(port.published))))]
-  for (const port of ports) await checkPortAvailable(port, project)
+  for (const port of ports) await step(`Check host port ${port} availability`, () => checkPortAvailable(port, project))
 }
 
 export function validateOrigins(config) {
@@ -172,35 +186,46 @@ export function validateOrigins(config) {
   return true
 }
 
-export async function preflight({ project = defaultProject, envFile: requestedEnvFile = '.env', checkPorts = true } = {}) {
-  validateProjectName(project)
-  const envFile = readEnvFile(requestedEnvFile)
-  const composeVersion = run('docker', ['compose', 'version', '--short']).stdout.trim()
-  if (compareVersions(parseVersion(composeVersion), minimumComposeVersion) < 0) {
-    throw new Error(`Docker Compose ${composeVersion} is too old; version 5.2.0 or newer is required for tested volume.subpath support`)
-  }
-  run('docker', ['version', '--format', '{{.Server.Version}}'])
-  const nodeVersion = process.versions.node.split('.').map(Number)
-  if (compareVersions(nodeVersion, [24, 1, 0]) < 0) throw new Error('Node.js 24.1.0 or newer is required')
-  const yarn = process.platform === 'win32'
-    ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'yarn --version'])
-    : run('yarn', ['--version'])
-  const yarnVersion = parseVersion(yarn.stdout.trim())
-  if (yarnVersion[0] < 4) throw new Error('Yarn 4 or newer is required')
-  const freeBytes = statfsSync(repoRoot).bavail * statfsSync(repoRoot).bsize
-  if (freeBytes < 1_073_741_824) throw new Error('At least 1 GiB of free workspace storage is required for image builds and cold backup')
-  validateDockerfiles()
-  await ensureSecrets(project)
-  const config = renderedConfig(project, envFile)
-  validateOrigins(config)
-  if (checkPorts) await checkHostPorts(project, config)
+export async function preflight({ project = defaultProject, envFile: requestedEnvFile = '.env', checkPorts = true, step = directStep } = {}) {
+  const envFile = await step('Validate project name and environment file', () => {
+    validateProjectName(project)
+    return readEnvFile(requestedEnvFile)
+  })
+  const composeVersion = await step('Check Docker Compose version', () => {
+    const version = run('docker', ['compose', 'version', '--short']).stdout.trim()
+    if (compareVersions(parseVersion(version), minimumComposeVersion) < 0) {
+      throw new Error(`Docker Compose ${version} is too old; version 5.2.0 or newer is required for tested volume.subpath support`)
+    }
+    return version
+  })
+  await step('Check Docker daemon', () => run('docker', ['version', '--format', '{{.Server.Version}}']))
+  await step('Check Node.js and Yarn versions', () => {
+    const nodeVersion = process.versions.node.split('.').map(Number)
+    if (compareVersions(nodeVersion, [24, 1, 0]) < 0) throw new Error('Node.js 24.1.0 or newer is required')
+    const yarn = process.platform === 'win32'
+      ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'yarn --version'])
+      : run('yarn', ['--version'])
+    const yarnVersion = parseVersion(yarn.stdout.trim())
+    if (yarnVersion[0] < 4) throw new Error('Yarn 4 or newer is required')
+  })
+  await step('Check available workspace storage', () => {
+    const freeBytes = statfsSync(repoRoot).bavail * statfsSync(repoRoot).bsize
+    if (freeBytes < 1_073_741_824) throw new Error('At least 1 GiB of free workspace storage is required for image builds and cold backup')
+  })
+  await step('Validate pinned service images', () => validateDockerfiles())
+  await step('Ensure local service secrets', () => ensureSecrets(project))
+  const config = await step('Render Compose configuration', () => renderedConfig(project, envFile))
+  await step('Validate port-derived browser origins', () => validateOrigins(config))
+  if (checkPorts) await checkHostPorts(project, config, step)
   return { project, envFile, config, composeVersion }
 }
 
-function createVolumes(project) {
+async function createVolumes(project, step = directStep) {
   for (const name of ['assessment_data', 'mailpit_data']) {
     const volume = volumeName(project, name)
-    if (!volumeExists(volume)) run('docker', ['volume', 'create', '--label', `com.executivepros.assessment.project=${project}`, volume])
+    await step(`Ensure persistent volume ${volume}`, () => {
+      if (!volumeExists(volume)) run('docker', ['volume', 'create', '--label', `com.executivepros.assessment.project=${project}`, volume])
+    })
   }
 }
 
@@ -267,16 +292,21 @@ async function createColdBackup(project, outputDirectory, envFile = '.env', { al
   return backupDirectory
 }
 
-export function runMigrations(project, envFile = '.env', runCompose = compose) {
-  runCompose(project, ['run', '--rm', '--no-deps', 'api', 'node', 'dist/bin/migrate.js', 'up'], { envFile })
-  runCompose(project, ['run', '--rm', '--no-deps', 'provider', 'node', 'dist/bin/migrate.js', 'up'], { envFile })
-  runCompose(project, ['run', '--rm', '--no-deps', 'provider', 'node', 'dist/src/initialize.js'], { envFile })
-  runCompose(project, ['run', '--rm', '--no-deps', 'queue', 'node', 'dist/src/initialize-db.js'], { envFile })
+export async function runMigrations(project, envFile = '.env', runCompose = compose, step = directStep) {
+  const initializers = [
+    ['Run API migrations and seed data', 'api', 'dist/bin/migrate.js', 'up'],
+    ['Run provider migrations', 'provider', 'dist/bin/migrate.js', 'up'],
+    ['Seed provider scenarios and initialize Workmatic', 'provider', 'dist/src/initialize.js'],
+    ['Initialize queue database and Workmatic', 'queue', 'dist/src/initialize-db.js'],
+  ]
+  for (const [label, service, ...command] of initializers) {
+    await step(label, () => runCompose(project, ['run', '--rm', '--no-deps', service, 'node', ...command], { envFile }))
+  }
 }
 
-export function startAfterMigrations(project, envFile = '.env', runCompose = compose) {
-  runMigrations(project, envFile, runCompose)
-  runCompose(project, ['up', '--detach', '--remove-orphans'], { envFile })
+export async function startAfterMigrations(project, envFile = '.env', runCompose = compose, step = directStep) {
+  await runMigrations(project, envFile, runCompose, step)
+  await step('Start six regular services', () => runCompose(project, ['up', '--detach', '--remove-orphans'], { envFile }))
 }
 
 function parseComposeStatus(contents) {
@@ -305,7 +335,7 @@ async function fetchChecked(url, name) {
   return response
 }
 
-export async function verifyDeploymentOrigins(config) {
+export async function verifyDeploymentOrigins(config, step = directStep) {
   const loopbackOrigin = (service) => `http://127.0.0.1:${config.services[service].ports[0].published}`
   const origins = {
     frontend: loopbackOrigin('frontend'),
@@ -321,56 +351,66 @@ export async function verifyDeploymentOrigins(config) {
     [`${origins.docs}/health/ready`, 'docs readiness'],
     [`${origins.mailpit}/readyz`, 'Mailpit readiness'],
   ]
-  for (const [url, label] of endpoints) await fetchChecked(url, label)
+  for (const [url, label] of endpoints) await step(`Verify ${label}`, () => fetchChecked(url, label))
 
-  const openApi = await (await fetchChecked(`${new URL(origins.api).origin}/v1/api_docs.json`, 'live API specification')).json()
-  if (openApi.servers?.[0]?.url !== origins.api) throw new Error('Live OpenAPI server URL differs from the configured browser API origin')
+  await step('Verify live OpenAPI server origin', async () => {
+    const openApi = await (await fetchChecked(`${new URL(origins.api).origin}/v1/api_docs.json`, 'live API specification')).json()
+    if (openApi.servers?.[0]?.url !== origins.api) throw new Error('Live OpenAPI server URL differs from the configured browser API origin')
+  })
 
   const frontendOrigin = new URL(origins.frontend).origin
   const apiOrigin = new URL(origins.api).origin
-  const cors = await fetch(`${apiOrigin}/v1/products`, {
-    method: 'OPTIONS',
-    headers: { Origin: frontendOrigin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization,content-type,idempotency-key' },
-    signal: AbortSignal.timeout(5000),
+  await step('Verify API CORS allows the frontend origin', async () => {
+    const cors = await fetch(`${apiOrigin}/v1/products`, {
+      method: 'OPTIONS',
+      headers: { Origin: frontendOrigin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization,content-type,idempotency-key' },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (cors.headers.get('access-control-allow-origin') !== frontendOrigin) throw new Error('API CORS does not allow the configured frontend origin')
   })
-  if (cors.headers.get('access-control-allow-origin') !== frontendOrigin) throw new Error('API CORS does not allow the configured frontend origin')
 
-  const providerResponse = await fetch(`${new URL(origins.provider).origin}/health/ready`, { cache: 'no-store' })
-  const providerPolicy = providerResponse.headers.get('content-security-policy') ?? ''
-  if (!providerPolicy.includes(`frame-ancestors ${frontendOrigin}`) || providerResponse.headers.has('x-frame-options')) {
-    throw new Error('Provider framing policy does not permit the configured frontend')
-  }
-  const frontendResponse = await fetch(`${frontendOrigin}/config.json`, { cache: 'no-store' })
-  const browserConfig = await frontendResponse.json()
-  for (const [key, expected] of [['API_ORIGIN', origins.api], ['PROVIDER_ORIGIN', origins.provider], ['DOCS_ORIGIN', origins.docs], ['MAILPIT_ORIGIN', origins.mailpit]]) {
-    if (browserConfig[key] !== expected) throw new Error(`Frontend runtime ${key} differs from its configured browser origin`)
-  }
+  await step('Verify provider framing policy', async () => {
+    const providerResponse = await fetch(`${new URL(origins.provider).origin}/health/ready`, { cache: 'no-store' })
+    const providerPolicy = providerResponse.headers.get('content-security-policy') ?? ''
+    if (!providerPolicy.includes(`frame-ancestors ${frontendOrigin}`) || providerResponse.headers.has('x-frame-options')) {
+      throw new Error('Provider framing policy does not permit the configured frontend')
+    }
+  })
+  await step('Verify frontend runtime origins', async () => {
+    const frontendResponse = await fetch(`${frontendOrigin}/config.json`, { cache: 'no-store' })
+    const browserConfig = await frontendResponse.json()
+    for (const [key, expected] of [['API_ORIGIN', origins.api], ['PROVIDER_ORIGIN', origins.provider], ['DOCS_ORIGIN', origins.docs], ['MAILPIT_ORIGIN', origins.mailpit]]) {
+      if (browserConfig[key] !== expected) throw new Error(`Frontend runtime ${key} differs from its configured browser origin`)
+    }
+  })
   return true
 }
 
 export async function deployLocal({ project = defaultProject, envFile: requestedEnvFile = '.env', outputDirectory = '.local/backups' } = {}) {
-  const { envFile, config } = await preflight({ project, envFile: requestedEnvFile })
-  console.log(`Preflight passed for Compose project ${project}.`)
-  compose(project, ['build'], { envFile })
-  createVolumes(project)
-  prepareDataDirectories(project)
-  if (hasPersistentDatabaseFiles(project)) {
-    stopAll(project, envFile)
-    const backup = await createColdBackup(project, outputDirectory, envFile, { alreadyStopped: true })
-    console.log(`Cold backup verified: ${backup}`)
+  const step = (label, action) => runLoggedStep(label, action)
+  const { envFile, config } = await preflight({ project, envFile: requestedEnvFile, step })
+  await step('Build all six service images', () => compose(project, ['build'], { envFile }))
+  await createVolumes(project, step)
+  await step('Prepare service-owned database directories', () => prepareDataDirectories(project))
+  const hasData = await step('Check for existing persistent database files', () => hasPersistentDatabaseFiles(project))
+  if (hasData) {
+    await step('Stop services before the cold backup', () => stopAll(project, envFile))
+    const backup = await step('Create and verify cold backup', () => createColdBackup(project, outputDirectory, envFile, { alreadyStopped: true }))
+    console.log(`Verified cold backup: ${backup}`)
   }
-  startAfterMigrations(project, envFile)
-  await waitForHealthy(project, envFile)
-  await verifyDeploymentOrigins(config)
+  await startAfterMigrations(project, envFile, compose, step)
+  await step('Wait for all six services to become healthy', () => waitForHealthy(project, envFile))
+  await verifyDeploymentOrigins(config, step)
   console.log(`All six services are healthy for project ${project}; persistent volumes were preserved.`)
+  console.log(`Frontend Service: http://127.0.0.1:${config.services.frontend.ports[0].published}`)
 }
 
 export async function migrateUp({ project = defaultProject, envFile: requestedEnvFile = '.env' } = {}) {
   const { envFile } = await preflight({ project, envFile: requestedEnvFile, checkPorts: false })
   compose(project, ['build', 'api', 'provider', 'queue'], { envFile })
-  createVolumes(project)
+  await createVolumes(project)
   prepareDataDirectories(project)
-  runMigrations(project, envFile)
+  await runMigrations(project, envFile)
   console.log(`API, provider, and queue database setup completed for ${project}; no regular service was started.`)
 }
 

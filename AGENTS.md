@@ -17,6 +17,7 @@ Implement the six-service assessment stack in `Implementation_Order.md`. Treat e
 - No client payment-status update route. Provider-authenticated webhooks and reconciliation own status evidence.
 - Preserve unimplemented tasks as unchecked. Check a task only after its stated behavior and gate pass.
 - Commit small verified slices with Conventional Commit messages. Never commit secrets, generated runtime data, or test/demo volumes.
+- A pending frontend payment must not disable scenario selection for a future checkout. Keep its original saved scenario and idempotency key intact for retries, and provide a Payments status link. `deploy:local` progress must report `starting:`, `success:`, and `failed:` per operation and print the derived frontend URL only after final verification.
 
 ## Cross-service contracts to keep aligned
 
