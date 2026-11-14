@@ -245,62 +245,62 @@ export function ProductsPage() {
 
   return <div className="space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="text-sm font-semibold uppercase tracking-widest text-sky-800">Storefront</p><h1 className="mt-1 text-3xl font-extrabold">Products and cart</h1><p className="mt-2 text-slate-600">Prices, availability, totals, and payment state come from the API.</p></div>
-      <Button variant="outline" onClick={() => { void refresh(); void refreshScenarios() }}>Refresh products and cart</Button>
+      <div><p className="text-sm font-semibold uppercase tracking-widest text-sky-800">Storefront</p><h1 className="mt-1 text-3xl font-extrabold">Products and Cart</h1><p className="mt-2 text-slate-600">Prices, availability, totals, and payment state come from the API.</p></div>
+      <Button variant="outline" onClick={() => { void refresh(); void refreshScenarios() }}>Refresh Products and Cart</Button>
     </div>
 
     {error && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-rose-900">{error}</p>}
     {notice && <p role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950">{notice}</p>}
 
     <Card>
-      <CardHeading>Payment scenario</CardHeading>
-      <p className="mb-3 text-sm text-slate-600">Provider cases are optional. Client demos below can be used instead of a provider scenario.</p>
-      <label className="grid max-w-2xl gap-2 font-medium" htmlFor="scenario">Provider scenario
+      <CardHeading>Payment Failure Scenario</CardHeading>
+      <p className="mb-3 text-sm text-slate-600"><span className="font-medium">Payment Provider Failure Cases</span> are optional. Client demos below can be used instead of a provider scenario.</p>
+      <label className="grid max-w-2xl gap-2 font-medium" htmlFor="scenario">Provider Scenario
         <select id="scenario" disabled={busy} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:bg-slate-100" value={scenario} onChange={(event) => setScenario(event.target.value)}>
-          <option value="">Standard checkout</option>
+          <option value="">Standard Checkout</option>
           {scenarios.map((entry) => <option key={entry.code} value={entry.code}>{entry.name} ({entry.code})</option>)}
         </select>
       </label>
-      {intent && <p className="mt-2 text-sm text-amber-900">A checkout outcome is pending or uncertain. You can choose a scenario for a future checkout; use the saved key to retry this attempt. {intent.payment_id && <Link className="font-semibold underline" to="/payments">View payment status</Link>}</p>}
+      {intent && <p className="mt-2 text-sm text-amber-900">A checkout outcome is pending or uncertain. You can choose a scenario for a future checkout; use the saved key to retry this attempt. {intent.payment_id && <Link className="font-semibold underline" to="/payments">View Payment Status</Link>}</p>}
       {scenarioError && <p className="mt-2 text-sm text-amber-900">Scenario catalogue unavailable: {scenarioError} Standard checkout remains available.</p>}
     </Card>
 
     <section aria-labelledby="products-heading">
-      <div className="mb-3 flex items-center justify-between"><h2 id="products-heading" className="text-xl font-bold">Available products</h2><span className="text-sm text-slate-600">Page {meta.page} of {totalPages}</span></div>
-      {loading ? <p role="status">Loading products…</p> : products.length === 0 ? <Card>No products are currently available.</Card> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-3 flex items-center justify-between"><h2 id="products-heading" className="text-xl font-bold">Available Products</h2><span className="text-sm text-slate-600">Page {meta.page} of {totalPages}</span></div>
+      {loading ? <p role="status">Loading Products…</p> : products.length === 0 ? <Card>No products are currently available.</Card> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {products.map((product) => <Card key={product.id} className="flex flex-col">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{product.sku}</p><h3 className="mt-2 text-lg font-bold">{product.name}</h3><p className="mt-1 flex-1 text-sm text-slate-600">{product.description}</p>
           <p className="mt-4 text-lg font-bold">{money(product.price_minor, product.currency)}</p><p className="mt-1 text-sm text-slate-600">{product.available_stock} available</p>
-          <div className="mt-4 flex items-end gap-2"><label className="grid gap-1 text-sm" htmlFor={`qty-${product.id}`}>Qty<input id={`qty-${product.id}`} type="number" min="1" max={product.available_stock} value={quantity[product.id] ?? 1} onChange={(event) => setQuantity({ ...quantity, [product.id]: Number(event.target.value) })} className="h-10 w-20 rounded border border-slate-300 px-2" /></label><Button disabled={busy || product.available_stock < 1} onClick={() => void add(product)}>Add to cart</Button></div>
+          <div className="mt-4 flex items-end gap-2"><label className="grid gap-1 text-sm" htmlFor={`qty-${product.id}`}>Qty<input id={`qty-${product.id}`} type="number" min="1" max={product.available_stock} value={quantity[product.id] ?? 1} onChange={(event) => setQuantity({ ...quantity, [product.id]: Number(event.target.value) })} className="h-10 w-20 rounded border border-slate-300 px-2" /></label><Button disabled={busy || product.available_stock < 1} onClick={() => void add(product)}>Add to Cart</Button></div>
         </Card>)}
       </div>}
       <div className="mt-4 flex justify-end gap-2"><Button variant="outline" disabled={meta.page <= 1} onClick={() => setMeta({ ...meta, page: meta.page - 1 })}>Previous</Button><Button variant="outline" disabled={meta.page >= totalPages} onClick={() => setMeta({ ...meta, page: meta.page + 1 })}>Next</Button></div>
     </section>
 
     <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><CardHeading>Active cart</CardHeading><p className="text-sm text-slate-600">{cart ? `Cart #${cart.id} · ${cart.status}` : 'No active cart'}</p></div>{cart && <Button variant="outline" disabled={busy} onClick={() => void abandonCart()}>Abandon cart</Button>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><CardHeading>Active Cart</CardHeading><p className="text-sm text-slate-600">{cart ? `Cart #${cart.id} · ${cart.status}` : 'No active cart'}</p></div>{cart && <Button variant="outline" disabled={busy} onClick={() => void abandonCart()}>Abandon Cart</Button>}</div>
       {!cart || cart.items.length === 0 ? <p className="text-slate-600">Your cart is empty.</p> : <>
         <ul className="divide-y divide-slate-200">{cart.items.map((item) => <li key={item.product_id} className="flex flex-wrap items-center justify-between gap-3 py-3">
           <div><p className="font-semibold">{item.product_name}</p><p className="text-sm text-slate-600">{money(item.unit_price_minor, item.currency ?? cart.currency)} each · line total {money(item.line_total_minor, item.currency ?? cart.currency)}</p></div>
           <div className="flex items-end gap-2"><label className="grid gap-1 text-xs" htmlFor={`cart-qty-${item.product_id}`}>Quantity<input id={`cart-qty-${item.product_id}`} type="number" min="1" value={item.quantity} onChange={(event) => void updateQuantity(item.product_id, Number(event.target.value))} className="h-10 w-20 rounded border border-slate-300 px-2 text-sm" /></label><Button variant="ghost" onClick={() => void removeItem(item.product_id)}>Remove</Button></div>
         </li>)}</ul>
         <p className="mt-3 text-right text-xl font-bold">Total from API: {money(cart.total_minor, cart.currency)}</p>
-        {latestPayment && <p className="mt-2 text-sm">Latest attempt: <Link className="underline" to={`/payments/${latestPayment.id}`}>{latestPayment.reference} — {latestPayment.status}</Link></p>}
-        {latestPayment?.status === 'pending' && <p className="mt-2 text-sm text-amber-900">A payment is pending. Reuse the saved key after an uncertain checkout response. <Link className="font-semibold underline" to="/payments">View payment status</Link></p>}
+        {latestPayment && <p className="mt-2 text-sm">Latest Attempt: <Link className="underline" to={`/payments/${latestPayment.id}`}>{latestPayment.reference} — {latestPayment.status}</Link></p>}
+        {latestPayment?.status === 'pending' && <p className="mt-2 text-sm text-amber-900">A payment is pending. Reuse the saved key after an uncertain checkout response. <Link className="font-semibold underline" to="/payments">View Payment Status</Link></p>}
         <div className="mt-4 flex flex-wrap gap-2">
           <Button disabled={busy || cart.status !== 'active'} onClick={() => void submitCheckout()}>Checkout</Button>
-          <Button variant="outline" disabled={busy || !cart.items.length || Boolean(scenario)} onClick={() => void timeoutDemo()}>Demo client timeout</Button>
-          <Button variant="outline" disabled={busy || !cart.items.length || Boolean(scenario)} onClick={() => void doubleCheckout()}>Demo double checkout</Button>
+          <Button variant="outline" disabled={busy || !cart.items.length || Boolean(scenario)} onClick={() => void timeoutDemo()}>Demo Client Timeout</Button>
+          <Button variant="outline" disabled={busy || !cart.items.length || Boolean(scenario)} onClick={() => void doubleCheckout()}>Demo Double Checkout</Button>
         </div>
-        {responses.length > 0 && <ul aria-label="Double checkout responses" className="mt-3 list-disc pl-5 text-sm">{responses.map((response) => <li key={response}>{response}</li>)}</ul>}
+        {responses.length > 0 && <ul aria-label="Double Checkout Responses" className="mt-3 list-disc pl-5 text-sm">{responses.map((response) => <li key={response}>{response}</li>)}</ul>}
       </>}
     </Card>
 
-    {intent && <Card className="border-amber-300 bg-amber-50"><CardHeading>Payment status</CardHeading><p>{intent.payment_id ? `Attempt ${intent.reference ?? `#${intent.payment_id}`} is not assumed complete until the API confirms a state.` : 'The checkout result is uncertain. The API may already have accepted this attempt.'}</p><div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => void retrySaved()}>Retry with saved key</Button>{intent.payment_id && <><Button variant="outline" onClick={() => void refreshPayment(intent.payment_id!)}>Refresh payment</Button><Link className="self-center underline" to={`/payments/${intent.payment_id}`}>View payment details</Link></>}</div></Card>}
-    {lastPayment && <Card className="border-amber-300 bg-amber-50"><CardHeading>Payment status</CardHeading><p>Payment {lastPayment.reference} is confirmed {lastPayment.status} by the API.</p><Link className="mt-3 inline-block underline" to={`/payments/${lastPayment.id}`}>View payment details</Link></Card>}
+    {intent && <Card className="border-amber-300 bg-amber-50"><CardHeading>Payment Status</CardHeading><p>{intent.payment_id ? `Attempt ${intent.reference ?? `#${intent.payment_id}`} is not assumed complete until the API confirms a state.` : 'The checkout result is uncertain. The API may already have accepted this attempt.'}</p><div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => void retrySaved()}>Retry With Saved Key</Button>{intent.payment_id && <><Button variant="outline" onClick={() => void refreshPayment(intent.payment_id!)}>Refresh Payment</Button><Link className="self-center underline" to={`/payments/${intent.payment_id}`}>View Payment Details</Link></>}</div></Card>}
+    {lastPayment && <Card className="border-amber-300 bg-amber-50"><CardHeading>Payment Status</CardHeading><p>Payment {lastPayment.reference} is confirmed {lastPayment.status} by the API.</p><Link className="mt-3 inline-block underline" to={`/payments/${lastPayment.id}`}>View Payment Details</Link></Card>}
 
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><CardHeading>Live payment updates</CardHeading><p aria-live="polite">{connection === 'connected' ? 'Connected to API events.' : connection === 'connecting' ? 'Connecting…' : 'Updates disconnected.'}</p></div>{connection === 'connected' ? <Button variant="outline" onClick={disconnect}>Demo SSE disconnect</Button> : <Button variant="outline" onClick={reconnect}>Reconnect updates</Button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><CardHeading>Live Payment Updates</CardHeading><p aria-live="polite">{connection === 'connected' ? 'Connected to API events.' : connection === 'connecting' ? 'Connecting…' : 'Updates disconnected.'}</p></div>{connection === 'connected' ? <Button variant="outline" onClick={disconnect}>Demo SSE Disconnect</Button> : <Button variant="outline" onClick={reconnect}>Reconnect Updates</Button>}</div>
     </Card>
 
     <PaymentDialog payment={activePayment} providerOrigin={config.PROVIDER_ORIGIN} onClose={() => { if (activePayment) setDismissedPaymentId(activePayment.id); setActivePayment(null) }} onFinished={onProviderHint} />

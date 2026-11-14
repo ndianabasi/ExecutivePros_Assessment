@@ -42,18 +42,18 @@ export function LoginPage() {
 
   return <div className="mx-auto max-w-xl py-12">
     <Card>
-      <p className="text-sm font-semibold uppercase tracking-widest text-sky-800">Trusted assessment demo</p>
-      <CardHeading className="mt-2 text-2xl">Choose a demo user</CardHeading>
+      <p className="text-sm font-semibold uppercase tracking-widest text-sky-800">Trusted Assessment Demo</p>
+      <CardHeading className="mt-2 text-2xl">Choose a Demo User</CardHeading>
       <p className="mb-5 text-slate-600">Passwordless access is enabled only for this trusted demo. The API enforces every role and payment rule.</p>
       {loading ? <p role="status">Loading active users…</p> : <label className="grid gap-2 font-medium" htmlFor="demo-user">User
         <select id="demo-user" className="min-h-11 rounded-lg border border-slate-300 bg-white px-3" value={selected} onChange={(event) => setSelected(event.target.value)}>
-          <option value="">Select a user</option>
+          <option value="">Select a User</option>
           {users.map((user) => <option key={user.id} value={user.id}>{user.first_name} {user.last_name} — {user.role}</option>)}
         </select>
       </label>}
       {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-rose-900">{error} <button className="ml-2 underline" onClick={() => window.location.reload()}>Retry</button></p>}
       {!loading && users.length === 0 && !error && <p className="mt-4">No active demo users are available.</p>}
-      <Button className="mt-5 w-full" disabled={!selected || busy || loading} onClick={() => void login()}>{busy ? 'Signing in…' : 'Select user'}</Button>
+      <Button className="mt-5 w-full" disabled={!selected || busy || loading} onClick={() => void login()}>{busy ? 'Signing In…' : 'Select User'}</Button>
     </Card>
   </div>
 }

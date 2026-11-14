@@ -14,7 +14,7 @@ async function start() {
     const config = parseRuntimeConfig(await response.json())
     root.render(<React.StrictMode><BrowserRouter><SessionProvider config={config}><App /></SessionProvider></BrowserRouter></React.StrictMode>)
   } catch (error) {
-    root.render(<main className="config-error"><h1>Configuration error</h1><p role="alert">{error instanceof Error ? error.message : 'The frontend cannot start without valid service origins.'}</p><button onClick={() => window.location.reload()}>Retry</button></main>)
+    root.render(<main className="config-error"><h1>Configuration Error</h1><p role="alert">{error instanceof Error ? error.message : 'The frontend cannot start without valid service origins.'}</p><button onClick={() => window.location.reload()}>Retry</button></main>)
   }
 }
 

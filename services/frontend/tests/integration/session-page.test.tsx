@@ -23,7 +23,7 @@ describe('seeded session flow', () => {
     render(<MemoryRouter initialEntries={['/login']}><SessionProvider config={config}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/products" element={<p>Storefront loaded</p>} /></Routes></SessionProvider></MemoryRouter>)
     await screen.findByRole('option', { name: 'Sam Admin — admin' })
     await user.selectOptions(screen.getByLabelText('User'), '2')
-    await user.click(screen.getByRole('button', { name: 'Select user' }))
+    await user.click(screen.getByRole('button', { name: 'Select User' }))
     expect(await screen.findByText('Storefront loaded')).toBeInTheDocument()
     await waitFor(() => expect(JSON.parse(localStorage.getItem(storageKey) ?? 'null')).toMatchObject({ token: 'issued-token-0123456789', user: { id: 2, role: 'admin' } }))
   })
