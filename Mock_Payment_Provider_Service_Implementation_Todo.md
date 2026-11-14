@@ -132,7 +132,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 - [x] Configure named Japa `unit`, `integration`, `contract`, and `e2e` suites; prove `test` runs all and each `test:*` script selects exactly one suite.
 - [x] Use Japa assertions and lifecycle hooks for disposable file-backed SQLite, scenario seeds, ephemeral HTTP listener, Japa API-client calls, and cleanup.
 - [ ] Run migrations/Knex-Workmatic concurrency/worker recovery in Japa `integration`, HMAC/API handoff fixtures in `contract`, and real Compose/browser/test-proxy/child-process crash cases in `e2e`.
-- [ ] **Static/build:** lint, strict typecheck, production build, lockfile integrity, no committed secrets, Alpine container build, and runtime SQLite module load pass.
+- [x] **Static/build:** lint, strict typecheck, production build, lockfile integrity, no committed secrets, Alpine container build, and runtime SQLite module load pass.
 - [ ] **Migration constraints:** real file-backed SQLite enforces unique references/event IDs/attempt numbers, checks, foreign keys, WAL, and busy timeout on all connections.
 - [ ] **Seed and startup:** scenario seeds are idempotent; Workmatic tables initialize in the same provider DB; bad path/schema fails before listening.
 - [ ] **Service auth:** missing/wrong service Bearer token fails for initialization, status lookup, and catalogue; user Bearer token is not accepted.
@@ -190,6 +190,7 @@ Source of truth: [Mock_Payment_Provider_Service_Implementation.md](Mock_Payment_
 
 - `yarn workspace @executivepros/provider test`: **passed**, 10 tests across unit, integration, and contract suites. The first run exposed two assertions reading event rows before the worker committed their terminal status; assertions now wait for persisted state before checking it.
 - Expanded the provider Japa scenarios to assert initialization delay, delayed delivery no earlier than its persisted due time, concurrent/sequential duplicate counts and byte identity, acknowledged-success-before-conflict ordering, active catalogue filtering/order, and immutable payment scenario snapshots across reseeding. `yarn workspace @executivepros/provider test` passes **11/11**; provider lint, typecheck, and build pass.
+- Provider artifact gate: `yarn install --immutable` passed; the freshly built Alpine image loaded `better-sqlite3` as UID `10003`; current tracked files had no matches for common private-key, cloud-key, payment-token, or source-control-token signatures, and `.env`/`.local/secrets/provider_service_secret` are ignored. The provider image was rebuilt in the isolated six-service deployment.
 - `yarn workspace @executivepros/provider test:unit`: **passed**, 2 tests.
 - `yarn workspace @executivepros/provider test:integration`: **passed**, 7 tests.
 - `yarn workspace @executivepros/provider test:contract`: **passed**, 1 test.
