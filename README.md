@@ -80,7 +80,7 @@ yarn deploy:local
 yarn status
 ```
 
-`deploy:local` creates `.env` from `.env.example` on first run, preserves it on later runs, generates three independent random service/HMAC secret files, writes their relative file paths into `.env`, then reads that environment file for the deployment. It checks versions, free space, image pins, origins, ports and rendered Compose config; builds the six images; prepares project volume subpaths; runs API, provider, then queue initialization in removed one-shot containers; starts the six services; waits for health; and checks browser origins, API CORS/OpenAPI, and provider framing. It does not run down migrations.
+`deploy:local` creates `.env` from `.env.example` on first run, preserves it on later runs, generates three independent random service/HMAC secret files, writes their relative file paths into `.env`, then reads that environment file for the deployment. It checks versions, free space, image pins, origins, ports and rendered Compose config; builds the six images with live Docker layer progress; prepares project volume subpaths; runs API, provider, then queue initialization in removed one-shot containers; starts the six services; waits for health; and checks browser origins, API CORS/OpenAPI, and provider framing. It does not run down migrations.
 
 Secret values live only in ignored `.local/secrets/` files with owner-only access and are mounted into their service consumers. The first deployment generates all three automatically; repeated or concurrent deploys reuse the same values. `.env` stores only repository-relative secret file paths, which work on Windows, Linux, and macOS. POSIX hosts use directory mode `0700` and file mode `0600`; Windows uses `icacls` to remove inherited access and grant the current user access. Container secret paths stay `/run/secrets/...` on every host. If project data exists but a secret is missing, deployment stops and asks for the original secret to be restored. Never copy secret values into `.env`, browser config, URLs, logs, reports, or commits.
 
@@ -109,6 +109,8 @@ yarn backup             # cold backup; services remain stopped
 ```
 
 `stop` preserves containers and volumes. `backup` stops writers, archives the entire shared database volume and Mailpit volume, checks archive readability, and writes a manifest with source volume identities, image IDs, secret fingerprints and archive checksums. Secret files are not included. Restore requires the same secret files and a new disposable project name:
+
+Mailpit retains captured messages and does not prune by age or count. During the demo, inspect inbox growth in its UI and check Docker storage with `docker system df -v`; each message is limited to 1 MB. Take the cold backup before upgrading or resetting a Mailpit volume.
 
 ```sh
 yarn restore path/to/verified-backup-directory \

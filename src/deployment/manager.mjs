@@ -49,14 +49,21 @@ export async function runLoggedStep(label, action, logger = console) {
   }
 }
 
-function run(command, args, { cwd = repoRoot, allowFailure = false, env = process.env } = {}) {
-  const result = spawnSync(command, args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+function run(
+  command,
+  args,
+  { cwd = repoRoot, allowFailure = false, env = process.env, streamOutput = false } = {},
+) {
+  const stdio = streamOutput ? ['ignore', 'inherit', 'inherit'] : ['ignore', 'pipe', 'pipe']
+  const result = spawnSync(command, args, { cwd, env, encoding: 'utf8', stdio })
   if (result.error) throw new Error(`Could not run ${command}: ${result.error.message}`)
   if (result.status !== 0 && !allowFailure) {
-    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.status}`
+    const detail = streamOutput
+      ? `exit ${result.status}`
+      : result.stderr.trim() || result.stdout.trim() || `exit ${result.status}`
     throw new Error(`${command} ${args[0] ?? ''} failed (${result.status}): ${detail}`)
   }
-  return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr }
+  return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
 }
 
 function composeArgs(project, args, envFile = '.env') {
@@ -83,13 +90,18 @@ function parseJsonLines(contents) {
     const parsed = JSON.parse(trimmed)
     return Array.isArray(parsed) ? parsed : [parsed]
   } catch {
-    return trimmed.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line))
+    return trimmed
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
   }
 }
 
 function readEnvFile(value = '.env') {
   let path
-  try { path = resolveRepositoryPath(repoRoot, value) } catch {
+  try {
+    path = resolveRepositoryPath(repoRoot, value)
+  } catch {
     throw new Error('Compose env file must exist inside this repository.')
   }
   if (!existsSync(path)) {
@@ -103,20 +115,26 @@ function readEnvFile(value = '.env') {
 async function ensureSecrets(project) {
   return initializeLocalSecrets({
     repositoryRoot: repoRoot,
-    hasPersistentData: async () => volumeExists(volumeName(project, 'assessment_data')) || volumeExists(volumeName(project, 'mailpit_data')),
+    hasPersistentData: async () =>
+      volumeExists(volumeName(project, 'assessment_data')) ||
+      volumeExists(volumeName(project, 'mailpit_data')),
   })
 }
 
 async function existingSecretFingerprints() {
   const secretDirectory = localSecretsDirectory(repoRoot)
   const directoryInfo = await lstat(secretDirectory).catch(() => null)
-  if (!directoryInfo?.isDirectory()) throw new Error('Restore requires the original owner-only .local/secrets directory')
+  if (!directoryInfo?.isDirectory())
+    throw new Error('Restore requires the original owner-only .local/secrets directory')
   await makeOwnerOnly(secretDirectory, true)
   const fingerprints = {}
   for (const name of requiredSecrets) {
     const path = secretPath(repoRoot, name)
     const info = await lstat(path).catch(() => null)
-    if (!info?.isFile()) throw new Error(`Restore requires the original regular file .local/secrets/${name}; it will not generate replacement secrets`)
+    if (!info?.isFile())
+      throw new Error(
+        `Restore requires the original regular file .local/secrets/${name}; it will not generate replacement secrets`,
+      )
     await makeOwnerOnly(path, false)
     const securedInfo = await lstat(path)
     const contents = await readFile(path)
@@ -138,8 +156,13 @@ async function checkPortAvailable(port, project) {
     if (error?.code !== 'EADDRINUSE') throw error
   }
   const containers = parseJsonLines(run('docker', ['ps', '--format', '{{json .}}']).stdout)
-  const matchesOwnedContainer = containers.some((container) => String(container.Names ?? '').startsWith(`${project}-`) && String(container.Ports ?? '').includes(`:${port}->`))
-  if (!matchesOwnedContainer) throw new Error(`Host port ${port} is already in use by another process or Compose project`)
+  const matchesOwnedContainer = containers.some(
+    (container) =>
+      String(container.Names ?? '').startsWith(`${project}-`) &&
+      String(container.Ports ?? '').includes(`:${port}->`),
+  )
+  if (!matchesOwnedContainer)
+    throw new Error(`Host port ${port} is already in use by another process or Compose project`)
 }
 
 function validateDockerfiles() {
@@ -151,7 +174,9 @@ function validateDockerfiles() {
     ['services/mock-email/Dockerfile', 'services/mock-email/Dockerfile'],
     ['services/provider/Dockerfile', 'services/provider/Dockerfile'],
   ]
-  const entries = Object.fromEntries(dockerfiles.map(([key, path]) => [key, readFileSync(join(repoRoot, path), 'utf8')]))
+  const entries = Object.fromEntries(
+    dockerfiles.map(([key, path]) => [key, readFileSync(join(repoRoot, path), 'utf8')]),
+  )
   assertPinnedAlpineDockerfiles(entries)
 }
 
@@ -163,8 +188,15 @@ function renderedConfig(project, envFile) {
 }
 
 async function checkHostPorts(project, config, step = directStep) {
-  const ports = [...new Set(Object.values(config.services).flatMap((service) => (service.ports ?? []).map((port) => Number(port.published))))]
-  for (const port of ports) await step(`Check host port ${port} availability`, () => checkPortAvailable(port, project))
+  const ports = [
+    ...new Set(
+      Object.values(config.services).flatMap((service) =>
+        (service.ports ?? []).map((port) => Number(port.published)),
+      ),
+    ),
+  ]
+  for (const port of ports)
+    await step(`Check host port ${port} availability`, () => checkPortAvailable(port, project))
 }
 
 export function validateOrigins(config) {
@@ -185,13 +217,20 @@ export function validateOrigins(config) {
   for (const [consumer, key, targetService] of expected) {
     const expectedOrigin = loopbackOrigin(targetService)
     if (config.services[consumer].environment[key] !== expectedOrigin) {
-      throw new Error(`${consumer}.${key} must be derived from the published ${targetService} port (${expectedOrigin})`)
+      throw new Error(
+        `${consumer}.${key} must be derived from the published ${targetService} port (${expectedOrigin})`,
+      )
     }
   }
   return true
 }
 
-export async function preflight({ project = defaultProject, envFile: requestedEnvFile = '.env', checkPorts = true, step = directStep } = {}) {
+export async function preflight({
+  project = defaultProject,
+  envFile: requestedEnvFile = '.env',
+  checkPorts = true,
+  step = directStep,
+} = {}) {
   const envFile = await step('Validate project name and environment file', () => {
     validateProjectName(project)
     return readEnvFile(requestedEnvFile)
@@ -199,7 +238,9 @@ export async function preflight({ project = defaultProject, envFile: requestedEn
   const composeVersion = await step('Check Docker Compose version', () => {
     const version = run('docker', ['compose', 'version', '--short']).stdout.trim()
     if (compareVersions(parseVersion(version), minimumComposeVersion) < 0) {
-      throw new Error(`Docker Compose ${version} is too old; version 5.2.0 or newer is required for tested volume.subpath support`)
+      throw new Error(
+        `Docker Compose ${version} is too old; version 5.2.0 or newer is required for tested volume.subpath support`,
+      )
     }
     return version
   })
@@ -207,15 +248,17 @@ export async function preflight({ project = defaultProject, envFile: requestedEn
   await step('Check Node.js and Yarn versions', () => {
     const nodeVersion = process.versions.node.split('.').map(Number)
     if (compareVersions(nodeVersion, [24, 1, 0]) < 0) throw new Error('Node.js 24.1.0 or newer is required')
-    const yarn = process.platform === 'win32'
-      ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'yarn --version'])
-      : run('yarn', ['--version'])
+    const yarn =
+      process.platform === 'win32'
+        ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'yarn --version'])
+        : run('yarn', ['--version'])
     const yarnVersion = parseVersion(yarn.stdout.trim())
     if (yarnVersion[0] < 4) throw new Error('Yarn 4 or newer is required')
   })
   await step('Check available workspace storage', () => {
     const freeBytes = statfsSync(repoRoot).bavail * statfsSync(repoRoot).bsize
-    if (freeBytes < 1_073_741_824) throw new Error('At least 1 GiB of free workspace storage is required for image builds and cold backup')
+    if (freeBytes < 1_073_741_824)
+      throw new Error('At least 1 GiB of free workspace storage is required for image builds and cold backup')
   })
   await step('Validate pinned service images', () => validateDockerfiles())
   await step('Ensure local service secrets', () => ensureSecrets(project))
@@ -232,34 +275,78 @@ async function createVolumes(project, step = directStep) {
   for (const name of ['assessment_data', 'mailpit_data']) {
     const volume = volumeName(project, name)
     await step(`Ensure persistent volume ${volume}`, () => {
-      if (!volumeExists(volume)) run('docker', ['volume', 'create', '--label', `com.executivepros.assessment.project=${project}`, volume])
+      if (!volumeExists(volume))
+        run('docker', [
+          'volume',
+          'create',
+          '--label',
+          `com.executivepros.assessment.project=${project}`,
+          volume,
+        ])
     })
   }
 }
 
 function prepareDataDirectories(project) {
   const volume = volumeName(project, 'assessment_data')
-  const commands = Object.entries(serviceOwners).map(([service, uid]) => `mkdir -p /data/${service} && chown ${uid}:${uid} /data/${service} && chmod 0700 /data/${service}`).join(' && ')
-  run('docker', ['run', '--rm', '--user', '0:0', '--mount', `type=volume,src=${volume},dst=/data`, alpineImage, 'sh', '-c', `chmod 0755 /data && ${commands}`])
+  const commands = Object.entries(serviceOwners)
+    .map(
+      ([service, uid]) =>
+        `mkdir -p /data/${service} && chown ${uid}:${uid} /data/${service} && chmod 0700 /data/${service}`,
+    )
+    .join(' && ')
+  run('docker', [
+    'run',
+    '--rm',
+    '--user',
+    '0:0',
+    '--mount',
+    `type=volume,src=${volume},dst=/data`,
+    alpineImage,
+    'sh',
+    '-c',
+    `chmod 0755 /data && ${commands}`,
+  ])
 }
 
 function hasPersistentDatabaseFiles(project) {
   const volume = volumeName(project, 'assessment_data')
   if (!volumeExists(volume)) return false
-  const result = run('docker', ['run', '--rm', '--mount', `type=volume,src=${volume},dst=/data,readonly`, alpineImage, 'sh', '-c', 'find /data -type f -print -quit'], { allowFailure: true })
+  const result = run(
+    'docker',
+    [
+      'run',
+      '--rm',
+      '--mount',
+      `type=volume,src=${volume},dst=/data,readonly`,
+      alpineImage,
+      'sh',
+      '-c',
+      'find /data -type f -print -quit',
+    ],
+    { allowFailure: true },
+  )
   return result.status === 0 && result.stdout.trim().length > 0
 }
 
 function serviceNamesRunning(project, envFile = '.env') {
-  const result = compose(project, ['ps', '--services', '--filter', 'status=running'], { allowFailure: true, envFile })
-  return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter((name) => regularServices.includes(name))
+  const result = compose(project, ['ps', '--services', '--filter', 'status=running'], {
+    allowFailure: true,
+    envFile,
+  })
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((name) => regularServices.includes(name))
 }
 
 function imageIds() {
-  return Object.fromEntries(Object.entries(imageNames).map(([service, image]) => {
-    const result = run('docker', ['image', 'inspect', '--format', '{{.Id}}', image], { allowFailure: true })
-    return [service, result.status === 0 ? result.stdout.trim() : 'not-built']
-  }))
+  return Object.fromEntries(
+    Object.entries(imageNames).map(([service, image]) => {
+      const result = run('docker', ['image', 'inspect', '--format', '{{.Id}}', image], { allowFailure: true })
+      return [service, result.status === 0 ? result.stdout.trim() : 'not-built']
+    }),
+  )
 }
 
 function stopAll(project, envFile = '.env') {
@@ -269,16 +356,42 @@ function stopAll(project, envFile = '.env') {
 async function createColdBackup(project, outputDirectory, envFile = '.env', { alreadyStopped = false } = {}) {
   const sharedVolume = volumeName(project, 'assessment_data')
   const mailpitVolume = volumeName(project, 'mailpit_data')
-  if (!volumeExists(sharedVolume) || !volumeExists(mailpitVolume)) throw new Error('Both persistent volumes must exist before backup')
+  if (!volumeExists(sharedVolume) || !volumeExists(mailpitVolume))
+    throw new Error('Both persistent volumes must exist before backup')
   await mkdir(outputDirectory, { recursive: true, mode: 0o700 })
   const absoluteOutput = resolve(outputDirectory)
   const label = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
   const backupDirectory = join(absoluteOutput, `${project}-${label}`)
   await mkdir(backupDirectory, { mode: 0o700 })
   if (!alreadyStopped) stopAll(project, envFile)
-  for (const [volume, archive] of [[sharedVolume, 'assessment_data.tar.gz'], [mailpitVolume, 'mailpit_data.tar.gz']]) {
-    run('docker', ['run', '--rm', '--user', '0:0', '--mount', `type=volume,src=${volume},dst=/source,readonly`, '--mount', `type=bind,src=${backupDirectory},dst=/backup`, alpineImage, 'sh', '-c', `tar -czf /backup/${archive} -C /source .`])
-    run('docker', ['run', '--rm', '--mount', `type=bind,src=${backupDirectory},dst=/backup,readonly`, alpineImage, 'tar', '-tzf', `/backup/${archive}`])
+  for (const [volume, archive] of [
+    [sharedVolume, 'assessment_data.tar.gz'],
+    [mailpitVolume, 'mailpit_data.tar.gz'],
+  ]) {
+    run('docker', [
+      'run',
+      '--rm',
+      '--user',
+      '0:0',
+      '--mount',
+      `type=volume,src=${volume},dst=/source,readonly`,
+      '--mount',
+      `type=bind,src=${backupDirectory},dst=/backup`,
+      alpineImage,
+      'sh',
+      '-c',
+      `tar -czf /backup/${archive} -C /source .`,
+    ])
+    run('docker', [
+      'run',
+      '--rm',
+      '--mount',
+      `type=bind,src=${backupDirectory},dst=/backup,readonly`,
+      alpineImage,
+      'tar',
+      '-tzf',
+      `/backup/${archive}`,
+    ])
   }
   const archives = []
   for (const name of ['assessment_data.tar.gz', 'mailpit_data.tar.gz']) {
@@ -296,7 +409,10 @@ async function createColdBackup(project, outputDirectory, envFile = '.env', { al
     archives,
   }
   validateBackupManifest(manifest)
-  await writeFile(join(backupDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+  await writeFile(join(backupDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, {
+    mode: 0o600,
+    flag: 'wx',
+  })
   return backupDirectory
 }
 
@@ -308,13 +424,22 @@ export async function runMigrations(project, envFile = '.env', runCompose = comp
     ['Initialize queue database and Workmatic', 'queue', 'dist/src/initialize-db.js'],
   ]
   for (const [label, service, ...command] of initializers) {
-    await step(label, () => runCompose(project, ['run', '--rm', '--no-deps', service, 'node', ...command], { envFile }))
+    await step(label, () =>
+      runCompose(project, ['run', '--rm', '--no-deps', service, 'node', ...command], { envFile }),
+    )
   }
 }
 
-export async function startAfterMigrations(project, envFile = '.env', runCompose = compose, step = directStep) {
+export async function startAfterMigrations(
+  project,
+  envFile = '.env',
+  runCompose = compose,
+  step = directStep,
+) {
   await runMigrations(project, envFile, runCompose, step)
-  await step('Start six regular services', () => runCompose(project, ['up', '--detach', '--remove-orphans'], { envFile }))
+  await step('Start six regular services', () =>
+    runCompose(project, ['up', '--detach', '--remove-orphans'], { envFile }),
+  )
 }
 
 function parseComposeStatus(contents) {
@@ -328,13 +453,19 @@ async function waitForHealthy(project, envFile = '.env', timeoutMs = 180_000) {
   while (Date.now() < deadline) {
     const result = compose(project, ['ps', '--format', 'json'], { allowFailure: true, envFile })
     if (result.status === 0) lastStatus = parseComposeStatus(result.stdout)
-    const exited = Object.entries(lastStatus).find(([, value]) => value.state === 'exited' || value.state === 'dead')
+    const exited = Object.entries(lastStatus).find(
+      ([, value]) => value.state === 'exited' || value.state === 'dead',
+    )
     if (exited) throw new Error(`${exited[0]} stopped before becoming healthy`)
     if (regularServices.every((service) => lastStatus[service]?.health === 'healthy')) return lastStatus
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000))
   }
-  const summary = Object.entries(lastStatus).map(([name, state]) => `${name}:${state.health || state.state}`).join(', ')
-  throw new Error(`Services did not become healthy in ${timeoutMs}ms (${summary || 'no containers reported'})`)
+  const summary = Object.entries(lastStatus)
+    .map(([name, state]) => `${name}:${state.health || state.state}`)
+    .join(', ')
+  throw new Error(
+    `Services did not become healthy in ${timeoutMs}ms (${summary || 'no containers reported'})`,
+  )
 }
 
 async function fetchChecked(url, name) {
@@ -362,8 +493,11 @@ export async function verifyDeploymentOrigins(config, step = directStep) {
   for (const [url, label] of endpoints) await step(`Verify ${label}`, () => fetchChecked(url, label))
 
   await step('Verify live OpenAPI server origin', async () => {
-    const openApi = await (await fetchChecked(`${new URL(origins.api).origin}/v1/api_docs.json`, 'live API specification')).json()
-    if (openApi.servers?.[0]?.url !== origins.api) throw new Error('Live OpenAPI server URL differs from the configured browser API origin')
+    const openApi = await (
+      await fetchChecked(`${new URL(origins.api).origin}/v1/api_docs.json`, 'live API specification')
+    ).json()
+    if (openApi.servers?.[0]?.url !== origins.api)
+      throw new Error('Live OpenAPI server URL differs from the configured browser API origin')
   })
 
   const frontendOrigin = new URL(origins.frontend).origin
@@ -371,42 +505,68 @@ export async function verifyDeploymentOrigins(config, step = directStep) {
   await step('Verify API CORS allows the frontend origin', async () => {
     const cors = await fetch(`${apiOrigin}/v1/products`, {
       method: 'OPTIONS',
-      headers: { Origin: frontendOrigin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization,content-type,idempotency-key' },
+      headers: {
+        Origin: frontendOrigin,
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization,content-type,idempotency-key',
+      },
       signal: AbortSignal.timeout(5000),
     })
-    if (cors.headers.get('access-control-allow-origin') !== frontendOrigin) throw new Error('API CORS does not allow the configured frontend origin')
+    if (cors.headers.get('access-control-allow-origin') !== frontendOrigin)
+      throw new Error('API CORS does not allow the configured frontend origin')
   })
 
   await step('Verify provider framing policy', async () => {
-    const providerResponse = await fetch(`${new URL(origins.provider).origin}/health/ready`, { cache: 'no-store' })
+    const providerResponse = await fetch(`${new URL(origins.provider).origin}/health/ready`, {
+      cache: 'no-store',
+    })
     const providerPolicy = providerResponse.headers.get('content-security-policy') ?? ''
-    if (!providerPolicy.includes(`frame-ancestors ${frontendOrigin}`) || providerResponse.headers.has('x-frame-options')) {
+    if (
+      !providerPolicy.includes(`frame-ancestors ${frontendOrigin}`) ||
+      providerResponse.headers.has('x-frame-options')
+    ) {
       throw new Error('Provider framing policy does not permit the configured frontend')
     }
   })
   await step('Verify frontend runtime origins', async () => {
     const frontendResponse = await fetch(`${frontendOrigin}/config.json`, { cache: 'no-store' })
     const browserConfig = await frontendResponse.json()
-    for (const [key, expected] of [['API_ORIGIN', origins.api], ['PROVIDER_ORIGIN', origins.provider], ['DOCS_ORIGIN', origins.docs], ['MAILPIT_ORIGIN', origins.mailpit]]) {
-      if (browserConfig[key] !== expected) throw new Error(`Frontend runtime ${key} differs from its configured browser origin`)
+    for (const [key, expected] of [
+      ['API_ORIGIN', origins.api],
+      ['PROVIDER_ORIGIN', origins.provider],
+      ['DOCS_ORIGIN', origins.docs],
+      ['MAILPIT_ORIGIN', origins.mailpit],
+    ]) {
+      if (browserConfig[key] !== expected)
+        throw new Error(`Frontend runtime ${key} differs from its configured browser origin`)
     }
   })
   return true
 }
 
-export async function deployLocal({ project = defaultProject, envFile: requestedEnvFile = '.env', outputDirectory = '.local/backups' } = {}) {
+export async function deployLocal({
+  project = defaultProject,
+  envFile: requestedEnvFile = '.env',
+  outputDirectory = '.local/backups',
+} = {}) {
   const step = (label, action) => runLoggedStep(label, action)
   await step('Prepare deployment environment file and create default .env if needed', () =>
     ensureDefaultEnvironmentFile({ repositoryRoot: repoRoot, envFile: requestedEnvFile }),
   )
   const { envFile, config } = await preflight({ project, envFile: requestedEnvFile, step })
-  await step('Build all six service images', () => compose(project, ['build'], { envFile }))
+  await step('Build all six service images', () =>
+    compose(project, ['--progress', 'plain', 'build'], { envFile, streamOutput: true }),
+  )
   await createVolumes(project, step)
   await step('Prepare service-owned database directories', () => prepareDataDirectories(project))
-  const hasData = await step('Check for existing persistent database files', () => hasPersistentDatabaseFiles(project))
+  const hasData = await step('Check for existing persistent database files', () =>
+    hasPersistentDatabaseFiles(project),
+  )
   if (hasData) {
     await step('Stop services before the cold backup', () => stopAll(project, envFile))
-    const backup = await step('Create and verify cold backup', () => createColdBackup(project, outputDirectory, envFile, { alreadyStopped: true }))
+    const backup = await step('Create and verify cold backup', () =>
+      createColdBackup(project, outputDirectory, envFile, { alreadyStopped: true }),
+    )
     console.log(`Verified cold backup: ${backup}`)
   }
   await startAfterMigrations(project, envFile, compose, step)
@@ -422,7 +582,9 @@ export async function migrateUp({ project = defaultProject, envFile: requestedEn
   await createVolumes(project)
   prepareDataDirectories(project)
   await runMigrations(project, envFile)
-  console.log(`API, provider, and queue database setup completed for ${project}; no regular service was started.`)
+  console.log(
+    `API, provider, and queue database setup completed for ${project}; no regular service was started.`,
+  )
 }
 
 export async function databaseDown({ project, confirmProject, envFile: requestedEnvFile = '.env' }) {
@@ -445,31 +607,66 @@ export async function showStatus({ project = defaultProject, envFile: requestedE
   process.stdout.write(result.stdout)
 }
 
-export async function backupDeployment({ project = defaultProject, envFile: requestedEnvFile = '.env', outputDirectory = '.local/backups' } = {}) {
+export async function backupDeployment({
+  project = defaultProject,
+  envFile: requestedEnvFile = '.env',
+  outputDirectory = '.local/backups',
+} = {}) {
   validateProjectName(project)
   const envFile = readEnvFile(requestedEnvFile)
   const running = serviceNamesRunning(project, envFile)
-  if (!volumeExists(volumeName(project, 'assessment_data')) || !volumeExists(volumeName(project, 'mailpit_data'))) throw new Error(`Project ${project} does not have both persistent volumes`)
+  if (
+    !volumeExists(volumeName(project, 'assessment_data')) ||
+    !volumeExists(volumeName(project, 'mailpit_data'))
+  )
+    throw new Error(`Project ${project} does not have both persistent volumes`)
   stopAll(project, envFile)
   try {
     const path = await createColdBackup(project, outputDirectory, envFile, { alreadyStopped: true })
     console.log(`Cold backup verified: ${path}. Services remain stopped; run 'yarn deploy:local' to resume.`)
   } catch (error) {
-    if (running.length > 0) compose(project, ['up', '--detach', '--no-build', ...running], { envFile, allowFailure: true })
+    if (running.length > 0)
+      compose(project, ['up', '--detach', '--no-build', ...running], { envFile, allowFailure: true })
     throw error
   }
 }
 
 async function restoreVolumeArchive(project, volume, directory, archive) {
   run('docker', ['volume', 'create', '--label', `com.executivepros.assessment.project=${project}`, volume])
-  run('docker', ['run', '--rm', '--user', '0:0', '--mount', `type=volume,src=${volume},dst=/data`, '--mount', `type=bind,src=${directory},dst=/backup,readonly`, alpineImage, 'tar', '-xzf', `/backup/${archive}`, '-C', '/data', '--numeric-owner'])
+  run('docker', [
+    'run',
+    '--rm',
+    '--user',
+    '0:0',
+    '--mount',
+    `type=volume,src=${volume},dst=/data`,
+    '--mount',
+    `type=bind,src=${directory},dst=/backup,readonly`,
+    alpineImage,
+    'tar',
+    '-xzf',
+    `/backup/${archive}`,
+    '-C',
+    '/data',
+    '--numeric-owner',
+  ])
 }
 
 function validateArchivePaths(directory, archive) {
-  const listing = run('docker', ['run', '--rm', '--mount', `type=bind,src=${directory},dst=/backup,readonly`, alpineImage, 'tar', '-tzf', `/backup/${archive}`]).stdout
+  const listing = run('docker', [
+    'run',
+    '--rm',
+    '--mount',
+    `type=bind,src=${directory},dst=/backup,readonly`,
+    alpineImage,
+    'tar',
+    '-tzf',
+    `/backup/${archive}`,
+  ]).stdout
   for (const rawPath of listing.split(/\r?\n/).filter(Boolean)) {
     const normalized = rawPath.replace(/^\.\//, '')
-    if (normalized.startsWith('/') || normalized.split('/').includes('..')) throw new Error(`Backup archive ${archive} contains an unsafe path`)
+    if (normalized.startsWith('/') || normalized.split('/').includes('..'))
+      throw new Error(`Backup archive ${archive} contains an unsafe path`)
   }
 }
 
@@ -478,31 +675,54 @@ async function verifySqliteDatabase(project, service, database, expectedTable) {
   compose(project, ['run', '--rm', '--no-deps', '--entrypoint', 'node', service, '-e', command])
 }
 
-export async function restoreDeployment({ backupDirectory, project, confirmProject, envFile: requestedEnvFile = '.env' } = {}) {
+export async function restoreDeployment({
+  backupDirectory,
+  project,
+  confirmProject,
+  envFile: requestedEnvFile = '.env',
+} = {}) {
   validateDisposableTarget(project, confirmProject)
   const source = resolve(backupDirectory)
   if (!isAbsolute(source) || !existsSync(source)) throw new Error('Backup directory does not exist')
   const manifest = JSON.parse(await readFile(join(source, 'manifest.json'), 'utf8'))
   validateBackupManifest(manifest)
-  if (manifest.project === project) throw new Error('Restore target must use a new project name separate from the backup source')
+  if (manifest.project === project)
+    throw new Error('Restore target must use a new project name separate from the backup source')
   for (const archive of manifest.archives) {
     const data = await readFile(join(source, archive.name))
-    if (createHash('sha256').update(data).digest('hex') !== archive.sha256) throw new Error(`Backup checksum failed for ${archive.name}`)
+    if (createHash('sha256').update(data).digest('hex') !== archive.sha256)
+      throw new Error(`Backup checksum failed for ${archive.name}`)
     validateArchivePaths(source, archive.name)
   }
   const fingerprints = await existingSecretFingerprints()
-  if (JSON.stringify(fingerprints) !== JSON.stringify(manifest.secret_fingerprints)) throw new Error('Backup secret fingerprints do not match this workspace; restore with the original ignored secret files')
+  if (JSON.stringify(fingerprints) !== JSON.stringify(manifest.secret_fingerprints))
+    throw new Error(
+      'Backup secret fingerprints do not match this workspace; restore with the original ignored secret files',
+    )
   const envFile = readEnvFile(requestedEnvFile)
   for (const name of ['assessment_data', 'mailpit_data']) {
     const target = volumeName(project, name)
     if (volumeExists(target)) throw new Error(`Restore target volume already exists: ${target}`)
   }
-  await restoreVolumeArchive(project, volumeName(project, 'assessment_data'), source, 'assessment_data.tar.gz')
+  await restoreVolumeArchive(
+    project,
+    volumeName(project, 'assessment_data'),
+    source,
+    'assessment_data.tar.gz',
+  )
   await restoreVolumeArchive(project, volumeName(project, 'mailpit_data'), source, 'mailpit_data.tar.gz')
   renderedConfig(project, envFile)
-  for (const [service, database, table] of [['api', 'api.db', 'users'], ['provider', 'payment_provider.db', 'payments'], ['queue', 'jobs.db', 'workmatic_jobs']]) {
+  for (const [service, database, table] of [
+    ['api', 'api.db', 'users'],
+    ['provider', 'payment_provider.db', 'payments'],
+    ['queue', 'jobs.db', 'workmatic_jobs'],
+  ]) {
     await verifySqliteDatabase(project, service, database, table)
   }
-  console.log(`Restored archives into new isolated project ${project}; SQLite integrity checks passed. No regular containers were started.`)
-  console.log(`Validated project configuration from ${envFile}; verify required origins before switching traffic.`)
+  console.log(
+    `Restored archives into new isolated project ${project}; SQLite integrity checks passed. No regular containers were started.`,
+  )
+  console.log(
+    `Validated project configuration from ${envFile}; verify required origins before switching traffic.`,
+  )
 }
